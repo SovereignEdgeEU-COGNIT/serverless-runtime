@@ -4,7 +4,6 @@ import logging
 import cloudpickle
 import pytest
 from fastapi.testclient import TestClient
-
 from main import app
 from models.faas import *
 from modules._faas_parser import FaasParser

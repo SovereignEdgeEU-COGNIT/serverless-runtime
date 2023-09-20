@@ -3,7 +3,6 @@ from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 from dask.distributed import Client, Future
-
 from modules._executor import Executor
 
 TaskId = str
