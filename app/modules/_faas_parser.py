@@ -29,3 +29,13 @@ class FaasParser:
         b64_bytes = base64.b64decode(input)
         # Cloudpickle it
         return cloudpickle.loads(b64_bytes)
+
+    def b64_to_str(self, input: str) -> Any:
+        # Decode it from base64
+        decoded_str = base64.b64decode(input).decode()
+        return decoded_str
+
+    def any_to_b64(self, input: Any) -> str:
+        # Encode it from base64
+        encoded_str = base64.b64encode(str(input).encode("utf-8"))
+        return encoded_str
