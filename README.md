@@ -57,6 +57,7 @@ To run unit tests:
 ```
 pytest --log-cli-level=DEBUG -s test_faas.py
 pytest --log-cli-level=DEBUG -s test_pyexec.py
+pytest --log-cli-level=DEBUG -s test_pyexec.py
 ```
 
 A README document is available in `docs/`, explaining how to test synchronous and asynchronous execution calls.   
