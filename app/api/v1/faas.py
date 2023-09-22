@@ -2,11 +2,11 @@ from typing import Any, Tuple
 
 from fastapi import APIRouter, HTTPException, Response
 from models.faas import *
+from modules._cexec import CExec
 from modules._faas_manager import FaasManager, TaskState
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec
-from modules._cexec import CExec
 
 faas_manager = FaasManager()
 faas_router = APIRouter()
