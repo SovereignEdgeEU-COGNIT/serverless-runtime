@@ -78,6 +78,7 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
 
         executor = PyExec(fc=fc, params=params)
 
+
     elif offloaded_func.lang == "C":
         try:
             fc, params = deserialize_c_fc(offloaded_func)
@@ -119,7 +120,7 @@ async def get_faas_uuid_status(faas_task_uuid: str):
         )
     elif status == TaskState.FAILED:
         response = AsyncExecResponse(
-            status=AsyncExecStatus.WORKING,
+            status=AsyncExecStatus.FAILED,
             res=None,
             exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
         )
