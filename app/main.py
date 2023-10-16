@@ -1,7 +1,6 @@
-from fastapi import FastAPI
-
 from api.v1.daas import daas_router
 from api.v1.faas import faas_router
+from fastapi import FastAPI
 
 app = FastAPI(title="Serverless Runtime")
 

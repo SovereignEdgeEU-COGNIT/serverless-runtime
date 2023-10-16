@@ -1,5 +1,4 @@
 from fastapi import APIRouter, HTTPException
-
 from models.daas import *
 
 daas_router = APIRouter()
