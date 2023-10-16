@@ -11,6 +11,7 @@ TaskId = str
 
 cognit_logger = CognitLogger()
 
+
 class TaskState(Enum):
     WORKING = "WORKING"
     OK = "OK"
@@ -36,15 +37,30 @@ class FaasManager:
         if task_uuid in self.task_map:
             if self.task_map[task_uuid].status == "pending":
                 if self.task_map[task_uuid].exception() is not None:
-                    cognit_logger.info("Status: {}; Error: {}".format(self.task_map[task_uuid].status, self.task_map[task_uuid].exception()))
+                    cognit_logger.info(
+                        "Status: {}; Error: {}".format(
+                            self.task_map[task_uuid].status,
+                            self.task_map[task_uuid].exception(),
+                        )
+                    )
                 return TaskState.WORKING, None
             elif self.task_map[task_uuid].status == "finished":
                 if self.task_map[task_uuid].exception() is not None:
-                    cognit_logger.info("Status: {}; Error: {}".format(self.task_map[task_uuid].status, self.task_map[task_uuid].exception()))
+                    cognit_logger.info(
+                        "Status: {}; Error: {}".format(
+                            self.task_map[task_uuid].status,
+                            self.task_map[task_uuid].exception(),
+                        )
+                    )
                 return TaskState.OK, self.task_map[task_uuid].result()
             else:
                 if self.task_map[task_uuid].exception() is not None:
-                    cognit_logger.info("Status: {}; Error: {}".format(self.task_map[task_uuid].status, self.task_map[task_uuid].exception()))
+                    cognit_logger.info(
+                        "Status: {}; Error: {}".format(
+                            self.task_map[task_uuid].status,
+                            self.task_map[task_uuid].exception(),
+                        )
+                    )
                 return TaskState.FAILED, None
         else:
             return None

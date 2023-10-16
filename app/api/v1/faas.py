@@ -78,7 +78,6 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
 
         executor = PyExec(fc=fc, params=params)
 
-
     elif offloaded_func.lang == "C":
         try:
             fc, params = deserialize_c_fc(offloaded_func)

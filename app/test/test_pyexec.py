@@ -3,13 +3,13 @@ import logging
 
 import cloudpickle
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from main import app
 from models.faas import *
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec
-from fastapi import HTTPException
 
 client = TestClient(app)
 cognit_logger = CognitLogger()
