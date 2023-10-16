@@ -1,7 +1,6 @@
 from modules._executor import *
 from modules._logger import CognitLogger
 
-
 cognit_logger = CognitLogger()
 
 

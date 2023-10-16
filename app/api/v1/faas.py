@@ -1,10 +1,8 @@
 from typing import Any, Tuple
 
 from fastapi import APIRouter, HTTPException, Response
-
 from models.faas import *
 from modules._cexec import CExec
-
 from modules._faas_manager import FaasManager, TaskState
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
@@ -121,7 +119,7 @@ async def get_faas_uuid_status(faas_task_uuid: str):
         )
     elif status == TaskState.FAILED:
         response = AsyncExecResponse(
-            status=AsyncExecStatus.WORKING,
+            status=AsyncExecStatus.FAILED,
             res=None,
             exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
         )

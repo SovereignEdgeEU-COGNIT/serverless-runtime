@@ -3,10 +3,13 @@ from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 from dask.distributed import Client, Future
-
+from fastapi import HTTPException
 from modules._executor import Executor
+from modules._logger import CognitLogger
 
 TaskId = str
+
+cognit_logger = CognitLogger()
 
 
 class TaskState(Enum):
@@ -26,16 +29,38 @@ class FaasManager:
         task_uuid = str(uuid.uuid1())
         task: Future = self.client.submit(executor.run)
         self.task_map[task_uuid] = task
+
         return task_uuid
 
     # Reeturn a tuple with the status and the result as Any
     def get_task_status(self, task_uuid: TaskId) -> Optional[Tuple[TaskState, Any]]:
         if task_uuid in self.task_map:
             if self.task_map[task_uuid].status == "pending":
+                if self.task_map[task_uuid].exception() is not None:
+                    cognit_logger.info(
+                        "Status: {}; Error: {}".format(
+                            self.task_map[task_uuid].status,
+                            self.task_map[task_uuid].exception(),
+                        )
+                    )
                 return TaskState.WORKING, None
             elif self.task_map[task_uuid].status == "finished":
+                if self.task_map[task_uuid].exception() is not None:
+                    cognit_logger.info(
+                        "Status: {}; Error: {}".format(
+                            self.task_map[task_uuid].status,
+                            self.task_map[task_uuid].exception(),
+                        )
+                    )
                 return TaskState.OK, self.task_map[task_uuid].result()
             else:
+                if self.task_map[task_uuid].exception() is not None:
+                    cognit_logger.info(
+                        "Status: {}; Error: {}".format(
+                            self.task_map[task_uuid].status,
+                            self.task_map[task_uuid].exception(),
+                        )
+                    )
                 return TaskState.FAILED, None
         else:
             return None
