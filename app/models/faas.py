@@ -13,6 +13,10 @@ class ExecSyncParams(BaseModel):
         default="",
         description="Function to be offloaded",
     )
+    fc_hash: str = Field(
+        default="",
+        description="Hash of the function to be offloaded",
+    )
     params: list[str] = Field(
         default="",
         description="List containing the serialized parameters by each device runtime transfered to the offloaded function",
@@ -27,6 +31,10 @@ class ExecAsyncParams(BaseModel):
     fc: str = Field(
         default="",
         description="Function to be offloaded",
+    )
+    fc_hash: str = Field(
+        default="",
+        description="Hash of the function to be offloaded",
     )
     params: list[str] = Field(
         default="",

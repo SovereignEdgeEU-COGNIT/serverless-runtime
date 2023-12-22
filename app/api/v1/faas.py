@@ -52,6 +52,8 @@ async def execute_sync(offloaded_func: ExecSyncParams):
         raise HTTPException(
             status_code=400, detail="Unsupported language. Supported languages: PY, C"
         )
+    if offloaded_func.fc_hash != "":
+        cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
 
     # Once the executor is created, run it and get the result blocking the thread
     executor.run()
@@ -88,6 +90,9 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
         raise HTTPException(
             status_code=400, detail="Unsupported language. Supported languages: PY, C"
         )
+
+    if offloaded_func.fc_hash != "":
+        cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
 
     task_id = faas_manager.add_task(executor=executor)
 
