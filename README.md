@@ -56,6 +56,7 @@ To run unit tests:
 
 ```
 pytest --log-cli-level=DEBUG -s test_faas.py
+pytest --log-cli-level=DEBUG -s test_cexec.py
 pytest --log-cli-level=DEBUG -s test_pyexec.py
 ```
 
