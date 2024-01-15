@@ -41,9 +41,9 @@ def get_vmid():
 
 
 def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
-    # TODO: Apply specific C deserialization
-    decoded_fc = faas_parser.deserialize(input_fc.fc)
-    decoded_params = [faas_parser.deserialize(p) for p in input_fc.params]
+    # Function is deserialized
+    decoded_fc = faas_parser.b64_to_str(input_fc.fc)
+    decoded_params = [faas_parser.b64_to_str(param) for param in input_fc.params]
     return decoded_fc, decoded_params
 
 class CognitFuncExecCollector(object):
@@ -101,7 +101,8 @@ async def execute_sync(offloaded_func: ExecSyncParams):
             fc, params = deserialize_c_fc(offloaded_func)
         except Exception as e:
             raise HTTPException(status_code=400, detail="Error deserializing function")
-        executor = CExec()
+        executor = CExec(fc=fc, params=params)
+        pass
     else:
         raise HTTPException(
             status_code=400, detail="Unsupported language. Supported languages: PY, C"
@@ -117,7 +118,12 @@ async def execute_sync(offloaded_func: ExecSyncParams):
     executor.run()
     global sync_end_time
     sync_end_time = time.time()
-    b64_res = faas_parser.serialize(executor.get_result())
+
+    if offloaded_func.lang == "PY":
+        b64_res = faas_parser.serialize(executor.get_result())
+    if offloaded_func.lang == "C":
+        b64_res = faas_parser.any_to_b64(executor.get_result())
+        
     result = ExecResponse(res=b64_res, ret_code=ExecReturnCode.SUCCESS)
 
     cognit_logger.debug(f"Result: {result}")
@@ -145,7 +151,8 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
             fc, params = deserialize_c_fc(offloaded_func)
         except Exception as e:
             raise HTTPException(status_code=400, detail="Error deserializing function")
-        executor = CExec()
+        executor = CExec(fc=fc, params=params)
+        pass
     else:
         raise HTTPException(
             status_code=400, detail="Unsupported language. Supported languages: PY, C"
