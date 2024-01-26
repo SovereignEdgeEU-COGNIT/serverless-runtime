@@ -32,7 +32,7 @@ class FaasManager:
 
         return task_uuid
 
-    # Reeturn a tuple with the status and the result as Any
+    # Return a tuple with the status and the result as Any
     def get_task_status(self, task_uuid: TaskId) -> Optional[Tuple[TaskState, Any]]:
         if task_uuid in self.task_map:
             if self.task_map[task_uuid].status == "pending":
@@ -52,7 +52,8 @@ class FaasManager:
                             self.task_map[task_uuid].exception(),
                         )
                     )
-                return TaskState.OK, self.task_map[task_uuid].result()
+                task_executor = self.task_map[task_uuid].result()
+                return TaskState.OK, task_executor
             else:
                 if self.task_map[task_uuid].exception() is not None:
                     cognit_logger.info(

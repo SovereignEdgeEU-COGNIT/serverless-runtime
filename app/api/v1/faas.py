@@ -10,7 +10,11 @@ from modules._cexec import CExec
 from modules._faas_manager import FaasManager, TaskState
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
-from modules._pyexec import PyExec
+from modules._pyexec import PyExec #, start_pyexec_time, end_pyexec_time
+import modules._pyexec as p
+import logging, os
+cognit_logger = CognitLogger()
+cognit_logger.set_level(logging.DEBUG)
 
 faas_manager = FaasManager()
 faas_router = APIRouter()
@@ -23,8 +27,8 @@ def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, 
     return decoded_fc, decoded_params
 
 def get_vmid():
-    #with open("/var/run/one-context/one_env", "r") as file_one:
-    with open("/tmp/one_env", "r") as file_one:
+    with open("/var/run/one-context/one_env", "r") as file_one:
+    #with open("/tmp/one_env", "r") as file_one:
         patt = "VMID="
         for l in file_one:
             if re.search(patt, l):
@@ -47,7 +51,7 @@ def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, A
     return decoded_fc, decoded_params
 
 class CognitFuncExecCollector(object):
-    def __init__(self): #, et, fc_hash, st_t, end_t):
+    def __init__(self):
         pass
 
     def collect(self):
@@ -55,7 +59,7 @@ class CognitFuncExecCollector(object):
         if 'off_func' in globals():
             self.fc_hash = off_func.fc_hash
         else:
-            self.fc_hash = "0"
+            self.fc_hash = "000-000-000"
         if 'sync_start_time' in globals():
             self.s_st_t = time.ctime(sync_start_time)
         else:
@@ -64,22 +68,41 @@ class CognitFuncExecCollector(object):
             self.s_end_t = time.ctime(sync_end_time)
         else:
             self.s_end_t = "0"
-        if 'sync_end_time' in globals() and isinstance(sync_end_time, float) and\
-            'sync_start_time' in globals() and isinstance(sync_start_time, float):
-            self.exec_time = sync_end_time - sync_start_time
-        else:    
-            self.exec_time = "0"
-        gauge = GaugeMetricFamily("func_exec_time", f'Function execution timei within VM_ID: {vmid}', labels=['vm_id', 'func_hash', 'start_time', 'end_time'])
-        gauge.add_metric([vmid, self.fc_hash, self.s_st_t, self.s_end_t], self.exec_time)
-        yield gauge
+        labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time']
+        if 'params_prom_label' in globals():
+            for i in range(len(params_prom_label)):
+                labels.append(f'param_l_{i}')
 
-class RandomNumberCollector(object):
-    def __init__(self):
-        pass
-    def collect(self):
-        gauge = GaugeMetricFamily("random_number", "A random number generator, I have no better idea", labels=["randomNum"])
-        gauge.add_metric(['random_num'], random.randint(1, 20))
-        yield gauge
+        # Define sync metric labels 
+        gauge = GaugeMetricFamily("func_exec_time", f'Function execution time within VM_ID: {vmid}', labels=labels)
+        if 'async_end_time' in globals() and isinstance(async_end_time, float):
+            # Define variables for setting async labels
+            self.exec_async_time = async_end_time - async_start_time
+            self.a_st_t = time.ctime(async_start_time)
+            self.a_end_t = time.ctime(async_end_time)
+            # Add async metric
+            metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t]
+            if 'params_prom_label' in globals():
+                for i in range(len(params_prom_label)):
+                    metric_label_values.append(str(params_prom_label[i]))
+
+            gauge.add_metric(metric_label_values, self.exec_async_time)
+            yield gauge 
+        elif 'sync_end_time' in globals() and isinstance(sync_end_time, float) and\
+            'sync_start_time' in globals() and isinstance(sync_start_time, float):
+            # Define variables for setting sync labels    
+            self.exec_time = sync_end_time - sync_start_time
+            # Add sync metric
+            metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t]
+            if 'params_prom_label' in globals():
+                for i in range(len(params_prom_label)):
+                    metric_label_values.append(str(params_prom_label[i]))
+
+            gauge.add_metric(metric_label_values, self.exec_time)
+            yield gauge
+        else:    
+            self.exec_time = 0.0
+            self.exec_async_time = 0.0
 
 # POST /v1/faas/execute-sync
 @faas_router.post("/execute-sync")
@@ -111,13 +134,24 @@ async def execute_sync(offloaded_func: ExecSyncParams):
         cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
     global off_func
     off_func = offloaded_func
+    
+    if 'params' in locals():
+        global params_prom_label
+        params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
+        params_prom_label.insert(0,params.__sizeof__())
+
+    # Define sync metric exposure global variables
+    global sync_start_time
+    global sync_end_time
+    # Switch to not async mode for Prometheus metrics
+    if 'async_end_time' in globals():
+        global async_end_time
+        del async_end_time
 
     # Once the executor is created, run it and get the result blocking the thread
-    global sync_start_time
-    sync_start_time = time.time()
     executor.run()
-    global sync_end_time
-    sync_end_time = time.time()
+    sync_start_time = executor.start_pyexec_time
+    sync_end_time = executor.end_pyexec_time
 
     if offloaded_func.lang == "PY":
         b64_res = faas_parser.serialize(executor.get_result())
@@ -145,7 +179,7 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
             raise HTTPException(status_code=400, detail=" Not callable function")
 
         executor = PyExec(fc=fc, params=params)
-
+        
     elif offloaded_func.lang == "C":
         try:
             fc, params = deserialize_c_fc(offloaded_func)
@@ -160,8 +194,15 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
 
     if offloaded_func.fc_hash != "":
         cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
+    global off_func
+    off_func = offloaded_func
 
     task_id = faas_manager.add_task(executor=executor)
+    
+    if 'params' in locals():
+        global params_prom_label
+        params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
+        params_prom_label.insert(0,params.__sizeof__())
 
     return AsyncExecResponse(
         status=AsyncExecStatus.WORKING,
@@ -182,8 +223,14 @@ async def get_faas_uuid_status(faas_task_uuid: str):
 
     if status == TaskState.OK:
         exec_response = ExecResponse(
-            ret_code=ExecReturnCode.SUCCESS, res=faas_parser.serialize(result)
+            ret_code=ExecReturnCode.SUCCESS, res=faas_parser.serialize(result.res)
         )
+        # Define async metrics global variables
+        global async_start_time
+        global async_end_time
+        # And get the values from task's executor
+        async_start_time = result.start_pyexec_time
+        async_end_time = result.end_pyexec_time
         response = AsyncExecResponse(
             status=AsyncExecStatus.READY,
             res=exec_response,
