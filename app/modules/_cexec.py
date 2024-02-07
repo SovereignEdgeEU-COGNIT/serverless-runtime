@@ -99,12 +99,16 @@ class CExec(Executor):
 
             # Declaration needs the '{' at the end of the line or at the beginning of the next
             if line.startswith("void") and (
-                (line.endswith("{"))
-                or ((i + 1) < len(lines) and (lines[i + 1].strip().startswith("{")))
+                (line.endswith("{") or ('{' in line and '}' in line)) #case bracket is in the same line
+                or ((i + 1) < len(lines) and (lines[i + 1].strip().startswith("{"))) #case bracket is in the next line
             ):
                 continue_adding = 1  # Once '{' is found, cotinue adding until curly_bracket_count == 0, that means end of func
                 function += line
                 curly_bracket_count += line.count("{") - line.count("}")
+                # This case, func logic is declared in the same line as the declaration
+                # CAUTION: if func is void sum(){ *c = a+b; and next line the } it will fail
+                if curly_bracket_count == 0 and line.count("{") == 1:
+                    continue_adding = 0
                 # Add function calling and params
                 self.extract_func_name_and_params(line)
 
@@ -116,6 +120,7 @@ class CExec(Executor):
             # print(f"Bracket: {curly_bracket_count}, Function: {function}, Continue: {continue_adding}")
             if curly_bracket_count == 0 and function != "" and continue_adding == 0:
                 # print(f"Add {function}")
+                cognit_logger.debug(f"Add {function}")
                 self.functions.append(function)
                 function = ""
                 continue_adding = 0
@@ -151,21 +156,24 @@ class CExec(Executor):
                     param_name = next(
                         (part for part in param_parts[1:] if part.strip()), None
                     )
-                    cognit_logger.debug(f"Param type: {param_type} Param type: {param_name}")
+                    cognit_logger.debug(f"Param type: {param_type} Param name: {param_name}")
                     # Check if param is a pointer
                     if param_name.startswith("*") or param_type.endswith("*"):
                         if param_type.endswith("*"):
                             param_type = param_type[:-1]
-                        # Delete spaces after *, if it's empty, var name is on param_parts[2]
-                        param_name = param_parts[1][1:].lstrip()
-                        if not param_name:
-                            param_name = next(
-                                (part for part in param_parts[2:] if part.strip()), None
-                            )
+                            cognit_logger.debug(f"Param type after edit: {param_type} Param name: {param_name}")
+                        else:
+                            # Delete spaces after *, if it's empty, var name is on param_parts[2]
+                            param_name = param_parts[1][1:].lstrip()
+                            if not param_name:
+                                param_name = next(
+                                    (part for part in param_parts[2:] if part.strip()), None
+                                )
                         param_mode = "OUT"
                     else:
                         param_mode = "IN"
                     # Create a Param instance and add to the list
+                    cognit_logger.debug(f"Param type: {param_type} Param name: {param_name} Param mode: {param_mode}")
                     param = Param(type=param_type, var_name=param_name, mode=param_mode)
                     func_params.append(param)
             else:
