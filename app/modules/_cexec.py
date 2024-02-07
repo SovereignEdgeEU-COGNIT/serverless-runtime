@@ -4,7 +4,9 @@ import os
 import subprocess
 from enum import Enum
 from typing import Any, Callable, Optional
+import time
 
+from fastapi import HTTPException
 from models.faas import Param
 from modules._executor import *
 from modules._logger import CognitLogger
@@ -36,6 +38,9 @@ class CExec(Executor):
         self.func_calling: str = ""
         # Result
         self.result: Optional[any]
+        # Execution times
+        self.start_pyexec_time = 0.0
+        self.end_pyexec_time = 0.1
 
     def raw_params_to_param_type(self):
         self.params = []
@@ -146,9 +151,11 @@ class CExec(Executor):
                     param_name = next(
                         (part for part in param_parts[1:] if part.strip()), None
                     )
-
+                    cognit_logger.debug(f"Param type: {param_type} Param type: {param_name}")
                     # Check if param is a pointer
-                    if param_name.startswith("*"):
+                    if param_name.startswith("*") or param_type.endswith("*"):
+                        if param_type.endswith("*"):
+                            param_type = param_type[:-1]
                         # Delete spaces after *, if it's empty, var name is on param_parts[2]
                         param_name = param_parts[1][1:].lstrip()
                         if not param_name:
@@ -237,82 +244,92 @@ class CExec(Executor):
                 )
 
     def run(self):
-        self.raw_params_to_param_type()
-        clingArgs = []
-        clingPath = os.path.expanduser(
-            "~/cling_git/cling_2020-11-05_ROOT-ubuntu18.04/bin/cling"
-        )
-        self.extract_includes()
-        self.extract_defines()
-        self.extract_typedefs()
-        self.extract_functions()
-        self.declare_output_param()
-        self.func_calling = self.gen_func_call_with_params()
+        try:
+            cognit_logger.info("Starting C function execution task")
+            self.start_pyexec_time = time.time()
+            self.raw_params_to_param_type()
+            clingArgs = []
+            clingPath = os.path.expanduser(
+                "~/cling_git/cling_2020-11-05_ROOT-ubuntu18.04/bin/cling"
+            )
+            self.extract_includes()
+            self.extract_defines()
+            self.extract_typedefs()
+            self.extract_functions()
+            self.declare_output_param()
+            self.func_calling = self.gen_func_call_with_params()
 
-        # clingArgs.append(".rawInput")
-        # Add includes
-        if len(self.includes) != 0:
-            for include in self.includes:
-                clingArgs.append(include)
-        # Add defines definitios
-        if len(self.defines) != 0:
-            for define in self.defines:
-                clingArgs.append(define)
-        # Add typedefs definitios
-        if len(self.typedefs) != 0:
-            for typedef in self.typedefs:
-                clingArgs.append(typedef)
-        # Add func definitios
-        if len(self.functions) != 0:
-            for function in self.functions:
-                clingArgs.append(function)
-        # Add output param definition
-        if len(self.out_param_definition) != 0:
-            for output_param in self.out_param_definition:
-                clingArgs.append(output_param)
-        # Add function calling, need to add None check in case none func matches
-        if self.func_calling != None and len(self.func_calling.strip()) != 0:
-            clingArgs.append(self.func_calling)
+            # clingArgs.append(".rawInput")
+            # Add includes
+            if len(self.includes) != 0:
+                for include in self.includes:
+                    clingArgs.append(include)
+            # Add defines definitios
+            if len(self.defines) != 0:
+                for define in self.defines:
+                    clingArgs.append(define)
+            # Add typedefs definitios
+            if len(self.typedefs) != 0:
+                for typedef in self.typedefs:
+                    clingArgs.append(typedef)
+            # Add func definitios
+            if len(self.functions) != 0:
+                for function in self.functions:
+                    clingArgs.append(function)
+            # Add output param definition
+            if len(self.out_param_definition) != 0:
+                for output_param in self.out_param_definition:
+                    clingArgs.append(output_param)
+            # Add function calling, need to add None check in case none func matches
+            if self.func_calling != None and len(self.func_calling.strip()) != 0:
+                clingArgs.append(self.func_calling)
 
-        # Adds output var name to get the output
-        if len(self.print_output_params) != 0:
-            for output_param_to_print in self.print_output_params:
-                clingArgs.append(output_param_to_print)
+            # Adds output var name to get the output
+            if len(self.print_output_params) != 0:
+                for output_param_to_print in self.print_output_params:
+                    clingArgs.append(output_param_to_print)
 
-        cognit_logger.debug(f"clingArgs: {clingArgs}")
+            cognit_logger.debug(f"clingArgs: {clingArgs}")
 
-        # Cling doesn't accept the code as clingArgs due to \n. Need to be something like:
-        # "#include <stdio.h>" + '\n' + "void sum(int a, int b, float *c){*c = a + b;}" +'\n'+ "float c;" '\n' + "sum(3, 4, &c);" + '\n'+ "c"
-        cling_code = ""
-        for line in clingArgs:
-            cling_code += str(line)
-            cling_code += "\n"
+            # Cling doesn't accept the code as clingArgs due to \n. Need to be something like:
+            # "#include <stdio.h>" + '\n' + "void sum(int a, int b, float *c){*c = a + b;}" +'\n'+ "float c;" '\n' + "sum(3, 4, &c);" + '\n'+ "c"
+            cling_code = ""
+            for line in clingArgs:
+                cling_code += str(line)
+                cling_code += "\n"
 
-        cognit_logger.debug(f"cling_code: {cling_code}")
+            cognit_logger.debug(f"cling_code: {cling_code}")
 
-        process = subprocess.Popen(
-            [clingPath], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
-        )
-        output, error = process.communicate(input=cling_code)
+            process = subprocess.Popen(
+                [clingPath], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+            )
+            output, error = process.communicate(input=cling_code)
 
-        listResult = output.split()
-        # Parse the output as the output type
-        for i, param in enumerate(self.params):
-            if param.mode == "OUT":
-                if param.type == "float":
-                    float_value_in_str = listResult[-1].rstrip("f")  # Deletes 'f' sufix
-                    self.result = float(float_value_in_str)
-                elif param.type == "int":
-                    self.result = int(listResult[-1])
-                elif param.type == "str":
-                    self.result = str(listResult[-1])
-                elif param.type == "bool":
-                    self.result = bool(listResult[-1])
-                else:
-                    self.result = listResult[-1]
+            listResult = output.split()
+            # Parse the output as the output type
+            for i, param in enumerate(self.params):
+                if param.mode == "OUT":
+                    if param.type == "float":
+                        float_value_in_str = listResult[-1].rstrip("f")  # Deletes 'f' sufix
+                        self.result = float(float_value_in_str)
+                    elif param.type == "int":
+                        self.result = int(listResult[-1])
+                    elif param.type == "str":
+                        self.result = str(listResult[-1])
+                    elif param.type == "bool":
+                        self.result = bool(listResult[-1])
+                    else:
+                        self.result = listResult[-1]
 
-        cognit_logger.info(f"Run C fuction: {self.fc}")
-        cognit_logger.info(f"Result: {self.result}")
+            cognit_logger.info(f"Run C fuction: {self.fc}")
+            cognit_logger.info(f"Result: {self.result}")
+            self.end_pyexec_time = time.time()
+            return
+        except Exception as e:
+            cognit_logger.error(f"Error while running C function: {e}")
+            self.res = None
+            self.end_pyexec_time = time.time()
+            raise HTTPException(status_code=400, detail="Error executing function")
         return
 
     def get_result(self):
