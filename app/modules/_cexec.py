@@ -32,8 +32,9 @@ class CExec(Executor):
         self.defines: list = []
         self.typedefs: list = []
         self.functions: list = []
-        self.func_struct_list: list[FuncStruct] = []
-        self.out_param_definition: list = []
+        self.func_struct_list: list[str] = []
+        self.func_name_2_exec: str = ""
+        self.param_definition_list: list = []
         self.print_output_params: list = []
         self.func_calling: str = ""
         # Result
@@ -41,6 +42,7 @@ class CExec(Executor):
         # Execution times
         self.start_pyexec_time = 0.0
         self.end_pyexec_time = 0.1
+        self.process: subprocess.Popen
 
     def raw_params_to_param_type(self):
         self.params = []
@@ -55,9 +57,6 @@ class CExec(Executor):
             param_instance = Param(**json_raw_param)
             self.params.append(param_instance)
 
-    # Asuming receive string as something like:
-    # with open('/content/sample_data/example.c', 'r') as file:
-    # file_content = file.read()
     def extract_includes(self):
         lines = self.fc.split("\n")
         for line in lines:
@@ -110,7 +109,7 @@ class CExec(Executor):
                 if curly_bracket_count == 0 and line.count("{") == 1:
                     continue_adding = 0
                 # Add function calling and params
-                self.extract_func_name_and_params(line)
+                self.extract_func_name(line)
 
             elif continue_adding == 1:
                 function += line
@@ -127,9 +126,8 @@ class CExec(Executor):
 
         return self.functions
 
-    def extract_func_name_and_params(self, line):
+    def extract_func_name(self, line):
         line = line.strip()
-        func_params = []
 
         # Validate that line starts with "void"
         if line.startswith("void "):
@@ -139,60 +137,35 @@ class CExec(Executor):
             opening_parenthesis_index = line.find("(")
             # Get func name until first parenthesis index
             func_name = line[:opening_parenthesis_index].strip()
-            # Get params from '(' until ')'
-            params_str = line[opening_parenthesis_index + 1 : line.rfind(")")].strip()
-            # Split params with ','
-            params_list = [param.strip() for param in params_str.split(",")]
-
-            if len(params_str.strip()) > 0:
-                # Split params by commas
-                params_list = [param.strip() for param in params_str.split(",")]
-                # Process each param and add to list
-                for param_str in params_list:
-                    param_parts = param_str.strip().split(
-                        " "
-                    )  # [0] -> type, [1] -> var_name/ */ &, [2] -> var
-                    param_type = param_parts[0]
-                    param_name = next(
-                        (part for part in param_parts[1:] if part.strip()), None
-                    )
-                    cognit_logger.debug(f"Param type: {param_type} Param name: {param_name}")
-                    # Check if param is a pointer
-                    if param_name.startswith("*") or param_type.endswith("*"):
-                        if param_type.endswith("*"):
-                            param_type = param_type[:-1]
-                            cognit_logger.debug(f"Param type after edit: {param_type} Param name: {param_name}")
-                        else:
-                            # Delete spaces after *, if it's empty, var name is on param_parts[2]
-                            param_name = param_parts[1][1:].lstrip()
-                            if not param_name:
-                                param_name = next(
-                                    (part for part in param_parts[2:] if part.strip()), None
-                                )
-                        param_mode = "OUT"
-                    else:
-                        param_mode = "IN"
-                    # Create a Param instance and add to the list
-                    cognit_logger.debug(f"Param type: {param_type} Param name: {param_name} Param mode: {param_mode}")
-                    param = Param(type=param_type, var_name=param_name, mode=param_mode)
-                    func_params.append(param)
-            else:
-                cognit_logger.warning("There is no parametrers")
-                param = Param(type="N/A", var_name="N/A", mode="N/A")
-                func_params.append(param)
-
-            # Create a FuncStruct instance and add to the list 'func_struct_list'
-            func_struct = FuncStruct(func_name, func_params)
-            self.func_struct_list.append(func_struct)
+            # Add func name to list
+            self.func_name_2_exec = func_name
         else:
             cognit_logger.warning("Line doesn't start with void")
+
+    def declare_all_params(self):
+        for param in self.params:
+            if param.mode == "OUT":
+                param_declaration = (
+                    f"{param.type}" + " " + f"{param.var_name}" + ";"
+                )
+                self.print_output_params.append(param.var_name) # Print output param for getting the value in stdout
+            elif param.mode == "IN":
+                if param.type == "char":
+                    param_declaration = (
+                        f"{param.type}" + " " + f"{param.var_name}" + "[] = " + f'"{param.value}"' + ";"
+                    )
+                else: # Case int, float, bool
+                    param_declaration = (
+                        f"{param.type}" + " " + f"{param.var_name}" + " = " + f"{param.value}" + ";"
+                    )
+            self.param_definition_list.append(param_declaration)
 
     def append_params_to_func_declaration(self, func_name):
         func_call = f"{func_name}("
 
         for i, param in enumerate(self.params):
             if param.mode == "IN":
-                func_call += f"{param.value}"
+                func_call += f"{param.var_name}"
             elif param.mode == "OUT":
                 func_call += f"&{param.var_name}"
 
@@ -202,54 +175,6 @@ class CExec(Executor):
         func_call += ");"
 
         return func_call
-
-    def declare_output_param(self):
-        for output_param_fc in self.func_struct_list:
-            for output_param in output_param_fc.params:
-                if output_param.mode == "OUT":
-                    output_var_declaration = (
-                        f"{output_param.type}" + " " + f"{output_param.var_name}" + ";"
-                    )
-                    self.out_param_definition.append(output_var_declaration)
-                    self.print_output_params.append(output_param.var_name)
-
-    def gen_func_call_with_params(self):
-        for func_struct in self.func_struct_list:
-            num_params = len(func_struct.params)
-            matched_params = 0
-            if num_params == len(self.params):
-                for func_param, param_to_replace in zip(
-                    func_struct.params, self.params
-                ):
-                    if (
-                        (func_param.type == param_to_replace.type)
-                        and (func_param.var_name == param_to_replace.var_name)
-                        and (func_param.mode == param_to_replace.mode)
-                    ):
-                        cognit_logger.debug(
-                            f"Param {param_to_replace} matches in function {func_struct.func_name}"
-                        )
-                        matched_params += 1
-
-                        if matched_params == num_params:
-                            cognit_logger.debug("All params matched")
-                            func_calling = self.append_params_to_func_declaration(
-                                func_struct.func_name
-                            )
-
-                            # print(func_calling)
-                            cognit_logger.debug(f"Function generated: {func_calling}")
-                            return func_calling
-                        else:
-                            cognit_logger.warning("Not all params matched")
-                    else:
-                        cognit_logger.warning(
-                            f"Param {func_param.var_name} doent match func {func_struct.func_name}"
-                        )
-            else:
-                cognit_logger.error(
-                    "Number of params requested =! number of func params"
-                )
 
     def run(self):
         try:
@@ -264,8 +189,8 @@ class CExec(Executor):
             self.extract_defines()
             self.extract_typedefs()
             self.extract_functions()
-            self.declare_output_param()
-            self.func_calling = self.gen_func_call_with_params()
+            self.declare_all_params()
+            self.func_calling = self.append_params_to_func_declaration(self.func_name_2_exec)
 
             # clingArgs.append(".rawInput")
             # Add includes
@@ -285,8 +210,8 @@ class CExec(Executor):
                 for function in self.functions:
                     clingArgs.append(function)
             # Add output param definition
-            if len(self.out_param_definition) != 0:
-                for output_param in self.out_param_definition:
+            if len(self.param_definition_list) != 0:
+                for output_param in self.param_definition_list:
                     clingArgs.append(output_param)
             # Add function calling, need to add None check in case none func matches
             if self.func_calling != None and len(self.func_calling.strip()) != 0:
@@ -308,10 +233,10 @@ class CExec(Executor):
 
             cognit_logger.debug(f"cling_code: {cling_code}")
 
-            process = subprocess.Popen(
+            self.process = subprocess.Popen(
                 [clingPath], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
             )
-            output, error = process.communicate(input=cling_code)
+            output, error = self.process.communicate(input=cling_code)
 
             listResult = output.split()
             # Parse the output as the output type
