@@ -49,7 +49,7 @@ class CExec(Executor):
         for raw_param in self.params_b64:
             json_raw_param = json.loads(raw_param)
             # Only decode the IN params that have value
-            if "value" in json_raw_param:
+            if "value" in json_raw_param and json_raw_param["mode"] == "IN":
                 decoded_value = base64.b64decode(json_raw_param["value"]).decode(
                     "utf-8"
                 )
