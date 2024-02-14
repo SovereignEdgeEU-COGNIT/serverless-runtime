@@ -183,7 +183,7 @@ class CExec(Executor):
             self.raw_params_to_param_type()
             clingArgs = []
             clingPath = os.path.expanduser(
-                "~/cling_git/cling_2020-11-05_ROOT-ubuntu18.04/bin/cling"
+                "/root/cling_test/cling_2020-11-05_ROOT-ubuntu18.04/bin/cling"
             )
             self.extract_includes()
             self.extract_defines()
