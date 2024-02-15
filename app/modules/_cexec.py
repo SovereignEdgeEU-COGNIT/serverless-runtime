@@ -22,10 +22,10 @@ class FuncStruct:
 
 class CExec(Executor):
     def __init__(self, fc: str, params: list[str]):
+        self.lang = "C"
         self.fc = fc
         self.params_b64 = params
         self.params: list[Param]
-        self.res: Optional[any]
         self.process_manager: Any
         # Function extraction attributes
         self.includes: list = []
@@ -38,7 +38,7 @@ class CExec(Executor):
         self.print_output_params: list = []
         self.func_calling: str = ""
         # Result
-        self.result: Optional[any]
+        self.res: Optional[any]
         # Execution times
         self.start_pyexec_time = 0.0
         self.end_pyexec_time = 0.1
@@ -244,20 +244,20 @@ class CExec(Executor):
                 if param.mode == "OUT":
                     if param.type == "float":
                         float_value_in_str = listResult[-1].rstrip("f")  # Deletes 'f' sufix
-                        self.result = float(float_value_in_str)
+                        self.res = float(float_value_in_str)
                     elif param.type == "int":
-                        self.result = int(listResult[-1])
+                        self.res = int(listResult[-1])
                     elif param.type == "str":
-                        self.result = str(listResult[-1])
+                        self.res = str(listResult[-1])
                     elif param.type == "bool":
-                        self.result = bool(listResult[-1])
+                        self.res = bool(listResult[-1])
                     else:
-                        self.result = listResult[-1]
+                        self.res = listResult[-1]
 
             cognit_logger.info(f"Run C fuction: {self.fc}")
-            cognit_logger.info(f"Result: {self.result}")
+            cognit_logger.info(f"Result: {self.res}")
             self.end_pyexec_time = time.time()
-            return
+            return self
         except Exception as e:
             cognit_logger.error(f"Error while running C function: {e}")
             self.res = None
@@ -267,5 +267,5 @@ class CExec(Executor):
 
     def get_result(self):
         cognit_logger.debug("Get C result func")
-        cognit_logger.info(f"Result: {self.result}")
-        return self.result
+        cognit_logger.info(f"Result: {self.res}")
+        return self.res

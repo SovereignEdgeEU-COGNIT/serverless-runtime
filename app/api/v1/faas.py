@@ -219,18 +219,24 @@ async def get_faas_uuid_status(faas_task_uuid: str):
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    status, result = task
+    status, executor = task
 
     if status == TaskState.OK:
-        exec_response = ExecResponse(
-            ret_code=ExecReturnCode.SUCCESS, res=faas_parser.serialize(result.res)
-        )
+        if executor.lang == "PY":
+            exec_response = ExecResponse(
+                ret_code=ExecReturnCode.SUCCESS, res=faas_parser.serialize(executor.res)
+            )
+        elif executor.lang == "C":
+            exec_response = ExecResponse(
+                ret_code=ExecReturnCode.SUCCESS, res=faas_parser.any_to_b64(executor.res)
+            )
+
         # Define async metrics global variables
         global async_start_time
         global async_end_time
         # And get the values from task's executor
-        async_start_time = result.start_pyexec_time
-        async_end_time = result.end_pyexec_time
+        async_start_time = executor.start_pyexec_time
+        async_end_time = executor.end_pyexec_time
         response = AsyncExecResponse(
             status=AsyncExecStatus.READY,
             res=exec_response,

@@ -12,6 +12,7 @@ import time
 
 class PyExec(Executor):
     def __init__(self, fc: Callable, params: list[str]):
+        self.lang = "PY"
         self.fc = fc
         self.params = params
         self.res: Optional[float]
