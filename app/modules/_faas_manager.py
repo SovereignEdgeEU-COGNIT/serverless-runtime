@@ -52,6 +52,7 @@ class FaasManager:
                             self.task_map[task_uuid].exception(),
                         )
                     )
+
                 task_executor = self.task_map[task_uuid].result()
                 return TaskState.OK, task_executor
             else:

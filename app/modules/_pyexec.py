@@ -9,7 +9,6 @@ cognit_logger = CognitLogger()
 
 import time
 
-
 class PyExec(Executor):
     def __init__(self, fc: Callable, params: list[str]):
         self.lang = "PY"
@@ -32,6 +31,7 @@ class PyExec(Executor):
             cognit_logger.info(e)
             self.res = None
             self.end_pyexec_time = time.time()
+
             raise HTTPException(status_code=400, detail="Error executing function")
 
     def get_result(self):
