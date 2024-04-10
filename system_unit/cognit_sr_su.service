@@ -1,0 +1,9 @@
+[Unit]
+Description=example systemd service unit file.
+
+[Service]
+TimeoutStartSec=5
+ExecStart=/bin/bash -c 'cd /root/serverless-runtime/ && source serverless-env/bin/activate && cd app/ && python3 main.py'
+
+[Install]
+WantedBy=multi-user.target

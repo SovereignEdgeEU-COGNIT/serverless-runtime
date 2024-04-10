@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -12,6 +12,10 @@ class ExecSyncParams(BaseModel):
     fc: str = Field(
         default="",
         description="Function to be offloaded",
+    )
+    fc_hash: str = Field(
+        default="",
+        description="Hash of the function to be offloaded",
     )
     params: list[str] = Field(
         default="",
@@ -27,6 +31,10 @@ class ExecAsyncParams(BaseModel):
     fc: str = Field(
         default="",
         description="Function to be offloaded",
+    )
+    fc_hash: str = Field(
+        default="",
+        description="Hash of the function to be offloaded",
     )
     params: list[str] = Field(
         default="",
@@ -91,3 +99,15 @@ class AsyncExecResponse(BaseModel):
         default=AsyncExecId(faas_task_uuid="000-000-000"),
         description="UUID of the offloaded function processing task",
     )
+
+
+class Param(BaseModel):
+    type: str
+    var_name: str
+    value: Optional[Any]
+    mode: str
+
+    def __init__(self, **kwargs):
+        if "value" not in kwargs:
+            kwargs["value"] = None
+        super().__init__(**kwargs)
