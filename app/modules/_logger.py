@@ -2,20 +2,32 @@ import inspect
 import logging
 import os
 
-
 class CognitLogger:
     LOGGER_NAME = "cognit-logger"
+    LOG_PATH = "/var/log/cognit"
+    LOG_FILENAME = "sr-app"
 
     def __init__(self, verbose=True):
         self.logger = logging.getLogger(self.LOGGER_NAME)
         self.verbose = verbose
+        # Make sure log path exists
+        try:
+            os.makedirs(self.LOG_PATH, exist_ok=True)
+        except OSError as e:
+            print("COGNIT logger Error: {0}".format(e))
         if not self.logger.hasHandlers():
             self.logger.propagate = False
             self.logger.setLevel(logging.DEBUG)
             formatter = logging.Formatter("[%(asctime)5s] [%(levelname)-s] %(message)s")
+            # Handle stdout output
             handler = logging.StreamHandler()
             handler.setFormatter(formatter)
             self.logger.addHandler(handler)
+
+            # Redirect output to log file
+            fileHandler = logging.FileHandler("{0}/{1}.log".format(self.LOG_PATH, self.LOG_FILENAME))
+            fileHandler.setFormatter(formatter)
+            self.logger.addHandler(fileHandler)
 
     def _log(self, level: int, message):
         if self.verbose:
