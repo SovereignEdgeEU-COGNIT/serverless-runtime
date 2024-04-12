@@ -2,6 +2,7 @@ import logging
 import sys
 
 import pytest
+from pytest_mock import MockerFixture
 
 sys.path.append("..")
 
@@ -14,7 +15,10 @@ faas_parser = FaasParser()
 
 
 # To run it: pytest --log-cli-level=DEBUG -s test_cexec.py
-def test_gen_func_call():
+def test_gen_func_call(
+    mocker: MockerFixture,
+):
+    # This is the decoded function call
     # {
     #     "lang": "C",
     #     "fc": "'#include <stdio.h>\nvoid sum(int a, int b, float *c){*c = a + b;}\nfloat c;\nsum(3, 4, &c);\nc'"
@@ -51,6 +55,12 @@ def test_gen_func_call():
 
     decoded_params = [faas_parser.b64_to_str(param) for param in req["params"]]
     executor = CExec(fc=faas_parser.b64_to_str(req["fc"]), params=decoded_params)
+
+    # Mock the cling subprocess call to avoid installing it to run this test
+    mock_process = mocker.Mock()
+    #  mock communicate fd to return (7, None ) tuple
+    mock_process.communicate.return_value = ("7", None)
+    mocker.patch("subprocess.Popen", return_value=mock_process)
 
     executor.run()
 
