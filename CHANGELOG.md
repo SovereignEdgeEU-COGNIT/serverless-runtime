@@ -2,8 +2,6 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
-
 ## [release-cognit-1.0]
 - Release M15.
 
@@ -11,3 +9,6 @@ All notable changes to this project will be documented in this file.
 
 - Function execution Prometheus metrics.
 - C executor.
+
+## [1.0.0]
+- Initial release (M9).	
