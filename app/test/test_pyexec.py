@@ -3,8 +3,8 @@ import logging
 
 import cloudpickle
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
-
 from main import app
 from models.faas import *
 from modules._faas_parser import FaasParser
@@ -42,34 +42,34 @@ def test_error_func():
 
     t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
 
-    with pytest.raises((TypeError, SyntaxError)) as e_info:
+    with pytest.raises((HTTPException)) as e_info:
         py_executor = PyExec(fc=t_fc, params=[2, 3])
         py_executor.run()
         b64_res = parser.serialize(py_executor.get_result())
 
     cognit_logger.debug(e_info.value)
-    assert e_info.type is TypeError or SyntaxError
+    assert e_info.type is HTTPException
 
 
 def test_error_param_type():
     print("Python parameter error test")
 
-    with pytest.raises((TypeError, SyntaxError, IndexError)) as e_info:
+    with pytest.raises((HTTPException)) as e_info:
         py_executor = PyExec(fc=myfunction, params=2)
         py_executor.run()
         b64_res = parser.serialize(py_executor.get_result())
 
     cognit_logger.debug(e_info.value)
-    assert e_info.type is TypeError or SyntaxError or IndexError
+    assert e_info.type is HTTPException
 
 
 def test_error_param_number():
     print("Python parameter error test")
 
-    with pytest.raises((TypeError, SyntaxError, IndexError)) as e_info:
+    with pytest.raises((HTTPException)) as e_info:
         py_executor = PyExec(fc=myfunction, params=[2])
         py_executor.run()
         b64_res = parser.serialize(py_executor.get_result())
 
     cognit_logger.debug(e_info.value)
-    assert e_info.type is TypeError or SyntaxError or IndexError
+    assert e_info.type is HTTPException
