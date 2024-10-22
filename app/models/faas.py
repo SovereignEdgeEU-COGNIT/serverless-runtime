@@ -21,6 +21,10 @@ class ExecSyncParams(BaseModel):
         default="",
         description="List containing the serialized parameters by each device runtime transfered to the offloaded function",
     )
+    app_req_id: int = Field(
+        default=0,
+        description="Requirement ID taht belongs to current function",
+    )
 
 
 class ExecAsyncParams(BaseModel):

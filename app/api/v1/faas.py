@@ -21,6 +21,8 @@ faas_router = APIRouter()
 cognit_logger = CognitLogger()
 faas_parser = FaasParser()
 
+global app_req_id
+
 def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
     decoded_fc = faas_parser.deserialize(input_fc.fc)
     decoded_params = [faas_parser.deserialize(p) for p in input_fc.params]
@@ -68,7 +70,7 @@ class CognitFuncExecCollector(object):
             self.s_end_t = time.ctime(sync_end_time)
         else:
             self.s_end_t = "0"
-        labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time']
+        labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time', 'requirement_id']
         if 'params_prom_label' in globals():
             for i in range(len(params_prom_label)):
                 labels.append(f'param_l_{i}')
@@ -81,7 +83,7 @@ class CognitFuncExecCollector(object):
             self.a_st_t = time.ctime(async_start_time)
             self.a_end_t = time.ctime(async_end_time)
             # Add async metric
-            metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t]
+            metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t, app_req_id]
             if 'params_prom_label' in globals():
                 for i in range(len(params_prom_label)):
                     metric_label_values.append(str(params_prom_label[i]))
@@ -93,7 +95,7 @@ class CognitFuncExecCollector(object):
             # Define variables for setting sync labels    
             self.exec_time = sync_end_time - sync_start_time
             # Add sync metric
-            metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t]
+            metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t, app_req_id]
             if 'params_prom_label' in globals():
                 for i in range(len(params_prom_label)):
                     metric_label_values.append(str(params_prom_label[i]))
@@ -111,9 +113,11 @@ async def execute_sync(offloaded_func: ExecSyncParams):
     # Validate and deserialize the request based on the language
     if offloaded_func.lang == "PY":
         try:
+            global app_req_id
+            app_req_id = str(offloaded_func.app_req_id)
             fc, params = deserialize_py_fc(offloaded_func)
         except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing function")
+            raise HTTPException(status_code=400, detail="Error deserializing sync PY function. More details; {0}".format(e))
         if not callable(fc):
             raise HTTPException(status_code=400, detail=" Not callable function")
 
@@ -123,7 +127,7 @@ async def execute_sync(offloaded_func: ExecSyncParams):
         try:
             fc, params = deserialize_c_fc(offloaded_func)
         except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing function")
+            raise HTTPException(status_code=400, detail="Error deserializing sync C function. More details; {0}".format(e))
         executor = CExec(fc=fc, params=params)
         pass
     else:
@@ -158,7 +162,7 @@ async def execute_sync(offloaded_func: ExecSyncParams):
     if offloaded_func.lang == "C":
         b64_res = faas_parser.any_to_b64(executor.get_result())
         
-    result = ExecResponse(res=b64_res, ret_code=ExecReturnCode.SUCCESS)
+    result = ExecResponse(res=b64_res, ret_code=executor.get_ret_code(), err= executor.get_err())
 
     cognit_logger.debug(f"Result: {result}")
 
@@ -174,7 +178,7 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
         try:
             fc, params = deserialize_py_fc(offloaded_func)
         except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing function")
+            raise HTTPException(status_code=400, detail="Error deserializing async PY function. More details; {0}".format(e))
         if not callable(fc):
             raise HTTPException(status_code=400, detail=" Not callable function")
 
@@ -184,7 +188,7 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
         try:
             fc, params = deserialize_c_fc(offloaded_func)
         except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing function")
+            raise HTTPException(status_code=400, detail="Error deserializing async C function. More details; {0}".format(e))
         executor = CExec(fc=fc, params=params)
         pass
     else:

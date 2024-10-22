@@ -16,6 +16,8 @@ class PyExec(Executor):
         self.fc = fc
         self.params = params
         self.res: Optional[float]
+        self.err: str
+        self.ret_code: ExecReturnCode
         self.process_manager: Any
         self.start_pyexec_time = 0.0
         self.end_pyexec_time = 0.1
@@ -27,12 +29,21 @@ class PyExec(Executor):
             self.res = self.fc(*self.params)
             cognit_logger.info("Done task...")
             self.end_pyexec_time = time.time()
+            self.ret_code = ExecReturnCode.SUCCESS
+            self.err = None
             return self
         except Exception as e:
             cognit_logger.info(e)
             self.res = None
             self.end_pyexec_time = time.time()
-            raise HTTPException(status_code=400, detail="Error executing function")
+            self.ret_code = ExecReturnCode.ERROR
+            self.err = "Error executing function: " + str(e)
 
     def get_result(self):
         return self.res
+
+    def get_err(self):
+        return self.err
+    
+    def get_ret_code(self):
+        return self.ret_code

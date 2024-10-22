@@ -39,7 +39,7 @@ if __name__ == "__main__":
     # Different Prometheus and COGNIT API server cmds in IPv4 or IPv6
     if type(ip_version) == IPv4Address:
         # Start Prometheus HTTP server on the desired port, for instance 9100
-        start_http_server(PROM_PORT, registry=r)
+        start_http_server(PROM_PORT, addr="0.0.0.0", registry=r)
         # Start uvicorn server to serve COGNIT Serverless Runtime API
         uvicorn.run(app, host="0.0.0.0", port=SR_PORT)
     elif type(ip_version) == IPv6Address:
