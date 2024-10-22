@@ -37,13 +37,6 @@ INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 ```
 
-For a detailed description of the API's endpoint features access:
-
-```
-http://0.0.0.0:8000/docs/
- ```
-
-
 ### Tests
 The test are found in the `test/` folder. The tests are written using the pytest framework. In order to run the tests, the following command can be used:
 
