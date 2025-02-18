@@ -20,7 +20,7 @@ DESCRIPTOR = _descriptor.FileDescriptor(
   syntax='proto3',
   serialized_options=None,
   create_key=_descriptor._internal_create_key,
-  serialized_pb=b'\n\nnano.proto\x1a\x0cnanopb.proto\"\"\n\x08MyDouble\x12\x16\n\x06values\x18\x01 \x03(\x01\x42\x06\x92?\x03\x10\x80\x02\"!\n\x07MyFloat\x12\x16\n\x06values\x18\x01 \x03(\x02\x42\x06\x92?\x03\x10\x80\x02\"!\n\x07MyInt32\x12\x16\n\x06values\x18\x01 \x03(\x05\x42\x06\x92?\x03\x10\x80\x02\"!\n\x07MyInt64\x12\x16\n\x06values\x18\x01 \x03(\x03\x42\x06\x92?\x03\x10\x80\x02\"\"\n\x08MyUint32\x12\x16\n\x06values\x18\x01 \x03(\rB\x06\x92?\x03\x10\x80\x02\"\"\n\x08MyUint64\x12\x16\n\x06values\x18\x01 \x03(\x04\x42\x06\x92?\x03\x10\x80\x02\"\"\n\x08MySint32\x12\x16\n\x06values\x18\x01 \x03(\x11\x42\x06\x92?\x03\x10\x80\x02\"\"\n\x08MySint64\x12\x16\n\x06values\x18\x01 \x03(\x12\x42\x06\x92?\x03\x10\x80\x02\"#\n\tMyFixed32\x12\x16\n\x06values\x18\x01 \x03(\x07\x42\x06\x92?\x03\x10\x80\x02\"#\n\tMyFixed64\x12\x16\n\x06values\x18\x01 \x03(\x06\x42\x06\x92?\x03\x10\x80\x02\"$\n\nMySfixed32\x12\x16\n\x06values\x18\x01 \x03(\x0f\x42\x06\x92?\x03\x10\x80\x02\"$\n\nMySfixed64\x12\x16\n\x06values\x18\x01 \x03(\x10\x42\x06\x92?\x03\x10\x80\x02\" \n\x06MyBool\x12\x16\n\x06values\x18\x01 \x03(\x08\x42\x06\x92?\x03\x10\x80\x02\"\xd0\x03\n\x07MyParam\x12\x1a\n\tmy_string\x18\x01 \x01(\tB\x05\x92?\x02p H\x00\x12\x1e\n\tmy_double\x18\x02 \x01(\x0b\x32\t.MyDoubleH\x00\x12\x1c\n\x08my_float\x18\x03 \x01(\x0b\x32\x08.MyFloatH\x00\x12\x1c\n\x08my_int32\x18\x04 \x01(\x0b\x32\x08.MyInt32H\x00\x12\x1c\n\x08my_int64\x18\x05 \x01(\x0b\x32\x08.MyInt64H\x00\x12\x1e\n\tmy_uint32\x18\x06 \x01(\x0b\x32\t.MyUint32H\x00\x12\x1e\n\tmy_uint64\x18\x07 \x01(\x0b\x32\t.MyUint64H\x00\x12\x1e\n\tmy_sint32\x18\x08 \x01(\x0b\x32\t.MySint32H\x00\x12\x1e\n\tmy_sint64\x18Z \x01(\x0b\x32\t.MySint64H\x00\x12 \n\nmy_fixed32\x18\n \x01(\x0b\x32\n.MyFixed32H\x00\x12 \n\nmy_fixed64\x18\x0b \x01(\x0b\x32\n.MyFixed64H\x00\x12\"\n\x0bmy_sfixed32\x18\x0c \x01(\x0b\x32\x0b.MySfixed32H\x00\x12\x1a\n\x07my_bool\x18\r \x01(\x0b\x32\x07.MyBoolH\x00\x12\"\n\x0bmy_sfixed64\x18\x0e \x01(\x0b\x32\x0b.MySfixed64H\x00\x42\x07\n\x05param\"j\n\x0b\x46\x61\x61sRequest\x12\r\n\x05\x66\x63_id\x18\x01 \x01(\x05\x12\x1f\n\x06params\x18\x02 \x03(\x0b\x32\x08.MyParamB\x05\x92?\x02\x10\x08\x12\x18\n\x08my_bytes\x18\x03 \x01(\x0c\x42\x06\x92?\x03p\x80\x10\x12\x11\n\tbytes_pos\x18\x04 \x01(\x05\"%\n\x0c\x46\x61\x61sResponse\x12\x15\n\x03res\x18\x01 \x01(\x0b\x32\x08.MyParam\"`\n\x06MyFunc\x12\x16\n\x07\x66\x63_name\x18\x01 \x01(\tB\x05\x92?\x02p \x12\x17\n\x07\x66\x63_code\x18\x02 \x01(\tB\x06\x92?\x03p\x80\x10\x12\x16\n\x07\x66\x63_hash\x18\x03 \x01(\tB\x05\x92?\x02p@\x12\r\n\x05\x66\x63_id\x18\x04 \x01(\rb\x06proto3'
+  serialized_pb=b'\n\nnano.proto\x1a\x0cnanopb.proto\"!\n\x08MyDouble\x12\x15\n\x06values\x18\x01 \x03(\x01\x42\x05\x92?\x02\x10 \" \n\x07MyFloat\x12\x15\n\x06values\x18\x01 \x03(\x02\x42\x05\x92?\x02\x10 \" \n\x07MyInt32\x12\x15\n\x06values\x18\x01 \x03(\x05\x42\x05\x92?\x02\x10 \" \n\x07MyInt64\x12\x15\n\x06values\x18\x01 \x03(\x03\x42\x05\x92?\x02\x10 \"!\n\x08MyUint32\x12\x15\n\x06values\x18\x01 \x03(\rB\x05\x92?\x02\x10 \"!\n\x08MyUint64\x12\x15\n\x06values\x18\x01 \x03(\x04\x42\x05\x92?\x02\x10 \"!\n\x08MySint32\x12\x15\n\x06values\x18\x01 \x03(\x11\x42\x05\x92?\x02\x10 \"!\n\x08MySint64\x12\x15\n\x06values\x18\x01 \x03(\x12\x42\x05\x92?\x02\x10 \"\"\n\tMyFixed32\x12\x15\n\x06values\x18\x01 \x03(\x07\x42\x05\x92?\x02\x10 \"\"\n\tMyFixed64\x12\x15\n\x06values\x18\x01 \x03(\x06\x42\x05\x92?\x02\x10 \"#\n\nMySfixed32\x12\x15\n\x06values\x18\x01 \x03(\x0f\x42\x05\x92?\x02\x10 \"#\n\nMySfixed64\x12\x15\n\x06values\x18\x01 \x03(\x10\x42\x05\x92?\x02\x10 \"\x1f\n\x06MyBool\x12\x15\n\x06values\x18\x01 \x03(\x08\x42\x05\x92?\x02\x10 \"\xd1\x03\n\x07MyParam\x12\x1e\n\tmy_double\x18\x01 \x01(\x0b\x32\t.MyDoubleH\x00\x12\x1c\n\x08my_float\x18\x02 \x01(\x0b\x32\x08.MyFloatH\x00\x12\x1c\n\x08my_int32\x18\x03 \x01(\x0b\x32\x08.MyInt32H\x00\x12\x1c\n\x08my_int64\x18\x04 \x01(\x0b\x32\x08.MyInt64H\x00\x12\x1e\n\tmy_uint32\x18\x05 \x01(\x0b\x32\t.MyUint32H\x00\x12\x1e\n\tmy_uint64\x18\x06 \x01(\x0b\x32\t.MyUint64H\x00\x12\x1e\n\tmy_sint32\x18\x07 \x01(\x0b\x32\t.MySint32H\x00\x12\x1e\n\tmy_sint64\x18\x08 \x01(\x0b\x32\t.MySint64H\x00\x12 \n\nmy_fixed32\x18\t \x01(\x0b\x32\n.MyFixed32H\x00\x12 \n\nmy_fixed64\x18\n \x01(\x0b\x32\n.MyFixed64H\x00\x12\"\n\x0bmy_sfixed32\x18\x0b \x01(\x0b\x32\x0b.MySfixed32H\x00\x12\"\n\x0bmy_sfixed64\x18\x0c \x01(\x0b\x32\x0b.MySfixed64H\x00\x12\x1a\n\x07my_bool\x18\r \x01(\x0b\x32\x07.MyBoolH\x00\x12\x1b\n\tmy_string\x18\x0e \x01(\tB\x06\x92?\x03p\x80\x01H\x00\x42\x07\n\x05param\"j\n\x0b\x46\x61\x61sRequest\x12\r\n\x05\x66\x63_id\x18\x01 \x01(\x05\x12\x1f\n\x06params\x18\x02 \x03(\x0b\x32\x08.MyParamB\x05\x92?\x02\x10\x08\x12\x18\n\x08my_bytes\x18\x03 \x01(\x0c\x42\x06\x92?\x03p\x80\x10\x12\x11\n\tbytes_pos\x18\x04 \x01(\x05\"%\n\x0c\x46\x61\x61sResponse\x12\x15\n\x03res\x18\x01 \x01(\x0b\x32\x08.MyParam\"a\n\x06MyFunc\x12\x16\n\x07\x66\x63_name\x18\x01 \x01(\tB\x05\x92?\x02p \x12\x17\n\x07\x66\x63_code\x18\x02 \x01(\tB\x06\x92?\x03p\x80\x08\x12\x17\n\x07\x66\x63_hash\x18\x03 \x01(\tB\x06\x92?\x03p\x80\x02\x12\r\n\x05\x66\x63_id\x18\x04 \x01(\rb\x06proto3'
   ,
   dependencies=[nanopb__pb2.DESCRIPTOR,])
 
@@ -41,7 +41,7 @@ _MYDOUBLE = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -55,7 +55,7 @@ _MYDOUBLE = _descriptor.Descriptor(
   oneofs=[
   ],
   serialized_start=28,
-  serialized_end=62,
+  serialized_end=61,
 )
 
 
@@ -73,7 +73,7 @@ _MYFLOAT = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -86,8 +86,8 @@ _MYFLOAT = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=64,
-  serialized_end=97,
+  serialized_start=63,
+  serialized_end=95,
 )
 
 
@@ -105,7 +105,7 @@ _MYINT32 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -118,8 +118,8 @@ _MYINT32 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=99,
-  serialized_end=132,
+  serialized_start=97,
+  serialized_end=129,
 )
 
 
@@ -137,7 +137,7 @@ _MYINT64 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -150,8 +150,8 @@ _MYINT64 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=134,
-  serialized_end=167,
+  serialized_start=131,
+  serialized_end=163,
 )
 
 
@@ -169,7 +169,7 @@ _MYUINT32 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -182,8 +182,8 @@ _MYUINT32 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=169,
-  serialized_end=203,
+  serialized_start=165,
+  serialized_end=198,
 )
 
 
@@ -201,7 +201,7 @@ _MYUINT64 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -214,8 +214,8 @@ _MYUINT64 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=205,
-  serialized_end=239,
+  serialized_start=200,
+  serialized_end=233,
 )
 
 
@@ -233,7 +233,7 @@ _MYSINT32 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -246,8 +246,8 @@ _MYSINT32 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=241,
-  serialized_end=275,
+  serialized_start=235,
+  serialized_end=268,
 )
 
 
@@ -265,7 +265,7 @@ _MYSINT64 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -278,8 +278,8 @@ _MYSINT64 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=277,
-  serialized_end=311,
+  serialized_start=270,
+  serialized_end=303,
 )
 
 
@@ -297,7 +297,7 @@ _MYFIXED32 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -310,8 +310,8 @@ _MYFIXED32 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=313,
-  serialized_end=348,
+  serialized_start=305,
+  serialized_end=339,
 )
 
 
@@ -329,7 +329,7 @@ _MYFIXED64 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -342,8 +342,8 @@ _MYFIXED64 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=350,
-  serialized_end=385,
+  serialized_start=341,
+  serialized_end=375,
 )
 
 
@@ -361,7 +361,7 @@ _MYSFIXED32 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -374,8 +374,8 @@ _MYSFIXED32 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=387,
-  serialized_end=423,
+  serialized_start=377,
+  serialized_end=412,
 )
 
 
@@ -393,7 +393,7 @@ _MYSFIXED64 = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -406,8 +406,8 @@ _MYSFIXED64 = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=425,
-  serialized_end=461,
+  serialized_start=414,
+  serialized_end=449,
 )
 
 
@@ -425,7 +425,7 @@ _MYBOOL = _descriptor.Descriptor(
       has_default_value=False, default_value=[],
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003\020\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\002\020 ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -438,8 +438,8 @@ _MYBOOL = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=463,
-  serialized_end=495,
+  serialized_start=451,
+  serialized_end=482,
 )
 
 
@@ -452,84 +452,84 @@ _MYPARAM = _descriptor.Descriptor(
   create_key=_descriptor._internal_create_key,
   fields=[
     _descriptor.FieldDescriptor(
-      name='my_string', full_name='MyParam.my_string', index=0,
-      number=1, type=9, cpp_type=9, label=1,
-      has_default_value=False, default_value=b"".decode('utf-8'),
+      name='my_double', full_name='MyParam.my_double', index=0,
+      number=1, type=11, cpp_type=10, label=1,
+      has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\002p ', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_double', full_name='MyParam.my_double', index=1,
+      name='my_float', full_name='MyParam.my_float', index=1,
       number=2, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_float', full_name='MyParam.my_float', index=2,
+      name='my_int32', full_name='MyParam.my_int32', index=2,
       number=3, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_int32', full_name='MyParam.my_int32', index=3,
+      name='my_int64', full_name='MyParam.my_int64', index=3,
       number=4, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_int64', full_name='MyParam.my_int64', index=4,
+      name='my_uint32', full_name='MyParam.my_uint32', index=4,
       number=5, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_uint32', full_name='MyParam.my_uint32', index=5,
+      name='my_uint64', full_name='MyParam.my_uint64', index=5,
       number=6, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_uint64', full_name='MyParam.my_uint64', index=6,
+      name='my_sint32', full_name='MyParam.my_sint32', index=6,
       number=7, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_sint32', full_name='MyParam.my_sint32', index=7,
+      name='my_sint64', full_name='MyParam.my_sint64', index=7,
       number=8, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_sint64', full_name='MyParam.my_sint64', index=8,
-      number=90, type=11, cpp_type=10, label=1,
+      name='my_fixed32', full_name='MyParam.my_fixed32', index=8,
+      number=9, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_fixed32', full_name='MyParam.my_fixed32', index=9,
+      name='my_fixed64', full_name='MyParam.my_fixed64', index=9,
       number=10, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_fixed64', full_name='MyParam.my_fixed64', index=10,
+      name='my_sfixed32', full_name='MyParam.my_sfixed32', index=10,
       number=11, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_sfixed32', full_name='MyParam.my_sfixed32', index=11,
+      name='my_sfixed64', full_name='MyParam.my_sfixed64', index=11,
       number=12, type=11, cpp_type=10, label=1,
       has_default_value=False, default_value=None,
       message_type=None, enum_type=None, containing_type=None,
@@ -543,12 +543,12 @@ _MYPARAM = _descriptor.Descriptor(
       is_extension=False, extension_scope=None,
       serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
-      name='my_sfixed64', full_name='MyParam.my_sfixed64', index=13,
-      number=14, type=11, cpp_type=10, label=1,
-      has_default_value=False, default_value=None,
+      name='my_string', full_name='MyParam.my_string', index=13,
+      number=14, type=9, cpp_type=9, label=1,
+      has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=None, file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\003p\200\001', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
   ],
   extensions=[
   ],
@@ -566,8 +566,8 @@ _MYPARAM = _descriptor.Descriptor(
       create_key=_descriptor._internal_create_key,
     fields=[]),
   ],
-  serialized_start=498,
-  serialized_end=962,
+  serialized_start=485,
+  serialized_end=950,
 )
 
 
@@ -619,8 +619,8 @@ _FAASREQUEST = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=964,
-  serialized_end=1070,
+  serialized_start=952,
+  serialized_end=1058,
 )
 
 
@@ -651,8 +651,8 @@ _FAASRESPONSE = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1072,
-  serialized_end=1109,
+  serialized_start=1060,
+  serialized_end=1097,
 )
 
 
@@ -677,14 +677,14 @@ _MYFUNC = _descriptor.Descriptor(
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\003p\200\020', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\003p\200\010', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='fc_hash', full_name='MyFunc.fc_hash', index=2,
       number=3, type=9, cpp_type=9, label=1,
       has_default_value=False, default_value=b"".decode('utf-8'),
       message_type=None, enum_type=None, containing_type=None,
       is_extension=False, extension_scope=None,
-      serialized_options=b'\222?\002p@', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
+      serialized_options=b'\222?\003p\200\002', file=DESCRIPTOR,  create_key=_descriptor._internal_create_key),
     _descriptor.FieldDescriptor(
       name='fc_id', full_name='MyFunc.fc_id', index=3,
       number=4, type=13, cpp_type=3, label=1,
@@ -704,8 +704,8 @@ _MYFUNC = _descriptor.Descriptor(
   extension_ranges=[],
   oneofs=[
   ],
-  serialized_start=1111,
-  serialized_end=1207,
+  serialized_start=1099,
+  serialized_end=1196,
 )
 
 _MYPARAM.fields_by_name['my_double'].message_type = _MYDOUBLE
@@ -719,11 +719,8 @@ _MYPARAM.fields_by_name['my_sint64'].message_type = _MYSINT64
 _MYPARAM.fields_by_name['my_fixed32'].message_type = _MYFIXED32
 _MYPARAM.fields_by_name['my_fixed64'].message_type = _MYFIXED64
 _MYPARAM.fields_by_name['my_sfixed32'].message_type = _MYSFIXED32
-_MYPARAM.fields_by_name['my_bool'].message_type = _MYBOOL
 _MYPARAM.fields_by_name['my_sfixed64'].message_type = _MYSFIXED64
-_MYPARAM.oneofs_by_name['param'].fields.append(
-  _MYPARAM.fields_by_name['my_string'])
-_MYPARAM.fields_by_name['my_string'].containing_oneof = _MYPARAM.oneofs_by_name['param']
+_MYPARAM.fields_by_name['my_bool'].message_type = _MYBOOL
 _MYPARAM.oneofs_by_name['param'].fields.append(
   _MYPARAM.fields_by_name['my_double'])
 _MYPARAM.fields_by_name['my_double'].containing_oneof = _MYPARAM.oneofs_by_name['param']
@@ -758,11 +755,14 @@ _MYPARAM.oneofs_by_name['param'].fields.append(
   _MYPARAM.fields_by_name['my_sfixed32'])
 _MYPARAM.fields_by_name['my_sfixed32'].containing_oneof = _MYPARAM.oneofs_by_name['param']
 _MYPARAM.oneofs_by_name['param'].fields.append(
+  _MYPARAM.fields_by_name['my_sfixed64'])
+_MYPARAM.fields_by_name['my_sfixed64'].containing_oneof = _MYPARAM.oneofs_by_name['param']
+_MYPARAM.oneofs_by_name['param'].fields.append(
   _MYPARAM.fields_by_name['my_bool'])
 _MYPARAM.fields_by_name['my_bool'].containing_oneof = _MYPARAM.oneofs_by_name['param']
 _MYPARAM.oneofs_by_name['param'].fields.append(
-  _MYPARAM.fields_by_name['my_sfixed64'])
-_MYPARAM.fields_by_name['my_sfixed64'].containing_oneof = _MYPARAM.oneofs_by_name['param']
+  _MYPARAM.fields_by_name['my_string'])
+_MYPARAM.fields_by_name['my_string'].containing_oneof = _MYPARAM.oneofs_by_name['param']
 _FAASREQUEST.fields_by_name['params'].message_type = _MYPARAM
 _FAASRESPONSE.fields_by_name['res'].message_type = _MYPARAM
 DESCRIPTOR.message_types_by_name['MyDouble'] = _MYDOUBLE

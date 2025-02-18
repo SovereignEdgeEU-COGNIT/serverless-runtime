@@ -30,7 +30,7 @@ async def c_upload_func(data: bytes = Body(..., media_type="application/octet-st
     my_func = nano_pb2.MyFunc()
     my_func.ParseFromString(data)
     global func_list
-    target_func = next((func for func in func_list if func.fc_name == my_func.fc_name), None)
+    target_func = next((func for func in func_list if func.fc_hash == my_func.fc_hash), None)
     if not target_func:
         cognit_logger.debug("Function '" + my_func.fc_name + "' was uploaded!")
         # Asign ID to MyFunc object
