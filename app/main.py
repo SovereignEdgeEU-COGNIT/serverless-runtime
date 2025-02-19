@@ -113,5 +113,5 @@ initialize_prometheus()
 # Uvicorn startup (only when running this script directly)
 if __name__ == "__main__":
     import uvicorn
-    cognit_logger.INFO("Starting Uvicorn server...")
+    cognit_logger.info("Starting Uvicorn server...")
     uvicorn.run(app, host="0.0.0.0", port=SR_PORT)
