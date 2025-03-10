@@ -1,31 +1,33 @@
 from typing import Any, Tuple
 import time, re, socket
 from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
-from prometheus_client.core import GaugeMetricFamily, REGISTRY
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY
 from . import nano_pb2
 from google.protobuf.json_format import Parse, MessageToJson
-import json#import random
-
+import json
 from fastapi import APIRouter, HTTPException, Response, Body
 from models.faas import *
 from modules._cexec import CExec
 from modules._faas_manager import FaasManager, TaskState
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
-from modules._pyexec import PyExec #, start_pyexec_time, end_pyexec_time
+from modules._pyexec import PyExec
 from .daas import func_list
-import modules._pyexec as p
 import logging, os
+from threading import Lock
 
 cognit_logger = CognitLogger()
 cognit_logger.set_level(logging.DEBUG)
 
 faas_manager = FaasManager()
 faas_router = APIRouter()
-cognit_logger = CognitLogger()
 faas_parser = FaasParser()
 
 global app_req_id
+global executor
+global executor_lock  # Thread lock for executor
+executor = None
+executor_lock = Lock()
 
 def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
     decoded_fc = faas_parser.deserialize(input_fc.fc)
@@ -34,7 +36,6 @@ def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, 
 
 def get_vmid():
     with open("/var/run/one-context/one_env", "r") as file_one:
-    #with open("/tmp/one_env", "r") as file_one:
         patt = "VMID="
         for l in file_one:
             if re.search(patt, l):
@@ -74,24 +75,17 @@ class CognitFuncExecCollector(object):
             self.s_end_t = time.ctime(sync_end_time)
         else:
             self.s_end_t = "0"
-        labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time', 'requirement_id']
-        if 'params_prom_label' in globals():
-            for i in range(len(params_prom_label)):
-                labels.append(f'param_l_{i}')
+        labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time', 'requirement_id', 'total_param_size']
 
         # Define sync metric labels 
-        gauge = GaugeMetricFamily("func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
+        gauge = GaugeMetricFamily("last_func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
         if 'async_end_time' in globals() and isinstance(async_end_time, float):
             # Define variables for setting async labels
             self.exec_async_time = async_end_time - async_start_time
             self.a_st_t = time.ctime(async_start_time)
             self.a_end_t = time.ctime(async_end_time)
             # Add async metric
-            metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t, app_req_id]
-            if 'params_prom_label' in globals():
-                for i in range(len(params_prom_label)):
-                    metric_label_values.append(str(params_prom_label[i]))
-
+            metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t, app_req_id, str(sum(params_prom_label))]
             gauge.add_metric(metric_label_values, self.exec_async_time)
             yield gauge 
         elif 'sync_end_time' in globals() and isinstance(sync_end_time, float) and\
@@ -99,21 +93,41 @@ class CognitFuncExecCollector(object):
             # Define variables for setting sync labels    
             self.exec_time = sync_end_time - sync_start_time
             # Add sync metric
-            metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t, app_req_id]
-            if 'params_prom_label' in globals():
-                for i in range(len(params_prom_label)):
-                    metric_label_values.append(str(params_prom_label[i]))
-
+            metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t, app_req_id, str(sum(params_prom_label))]
             gauge.add_metric(metric_label_values, self.exec_time)
             yield gauge
         else:    
             self.exec_time = 0.0
             self.exec_async_time = 0.0
+            
+        # Add metric GAUGE for function status
+        func_status_labels = ['func_hash', 'vm_id', 'total_param_size']
+        func_status_gauge = GaugeMetricFamily("func_status", "Function execution status", labels=func_status_labels)
+        
+        global executor
+        if executor is not None:
+            func_status = executor.get_status()
+            func_status_gauge.add_metric([off_func.fc_hash, vmid, str(sum(params_prom_label))], func_status)
+            yield func_status_gauge
+
+            # Add counters for executed, succeeded, and failed functions
+            executed_counter = CounterMetricFamily("func_executed_total", "Total number of executed functions", labels=['vm_id'])
+            succeeded_counter = CounterMetricFamily("func_succeeded_total", "Total number of succeeded functions", labels=['vm_id'])
+            failed_counter = CounterMetricFamily("func_failed_total", "Total number of failed functions", labels=['vm_id'])
+
+            executed_counter.add_metric([vmid], executor.get_executed_func_counter())
+            succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
+            failed_counter.add_metric([vmid], executor.get_failed_func_counter())
+
+            yield executed_counter
+            yield succeeded_counter
+            yield failed_counter
 
 # POST /v1/faas/execute-sync
 @faas_router.post("/execute-sync")
 async def execute_sync(offloaded_func: ExecSyncParams):
-    executor = None
+    global executor
+    
     # Validate and deserialize the request based on the language
     if offloaded_func.lang == "PY":
         try:
@@ -133,11 +147,11 @@ async def execute_sync(offloaded_func: ExecSyncParams):
         except Exception as e:
             raise HTTPException(status_code=400, detail="Error deserializing sync C function. More details; {0}".format(e))
         executor = CExec(fc=fc, params=params)
-        pass
     else:
         raise HTTPException(
             status_code=400, detail="Unsupported language. Supported languages: PY, C"
         )
+
     if offloaded_func.fc_hash != "":
         cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
     global off_func
@@ -172,51 +186,50 @@ async def execute_sync(offloaded_func: ExecSyncParams):
 
     return result.dict()
 
-
 # POST /v1/faas/execute-async
 @faas_router.post("/execute-async")
 async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
-    executor = None
-    # Validate and deserialize the reuquest based on the language
-    if offloaded_func.lang == "PY":
-        try:
-            fc, params = deserialize_py_fc(offloaded_func)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing async PY function. More details; {0}".format(e))
-        if not callable(fc):
-            raise HTTPException(status_code=400, detail=" Not callable function")
+    global executor, executor_lock
+    with executor_lock:
+        # Validate and deserialize the request based on the language
+        if offloaded_func.lang == "PY":
+            try:
+                fc, params = deserialize_py_fc(offloaded_func)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail="Error deserializing async PY function. More details; {0}".format(e))
+            if not callable(fc):
+                raise HTTPException(status_code=400, detail=" Not callable function")
 
-        executor = PyExec(fc=fc, params=params)
+            executor = PyExec(fc=fc, params=params)
+            
+        elif offloaded_func.lang == "C":
+            try:
+                fc, params = deserialize_c_fc(offloaded_func)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail="Error deserializing async C function. More details; {0}".format(e))
+            executor = CExec(fc=fc, params=params)
+        else:
+            raise HTTPException(
+                status_code=400, detail="Unsupported language. Supported languages: PY, C"
+            )
+
+        if offloaded_func.fc_hash != "":
+            cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
+        global off_func
+        off_func = offloaded_func
+
+        task_id = faas_manager.add_task(executor=executor)
         
-    elif offloaded_func.lang == "C":
-        try:
-            fc, params = deserialize_c_fc(offloaded_func)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing async C function. More details; {0}".format(e))
-        executor = CExec(fc=fc, params=params)
-        pass
-    else:
-        raise HTTPException(
-            status_code=400, detail="Unsupported language. Supported languages: PY, C"
-        )
+        if 'params' in locals():
+            global params_prom_label
+            params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
+            params_prom_label.insert(0,params.__sizeof__())
 
-    if offloaded_func.fc_hash != "":
-        cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
-    global off_func
-    off_func = offloaded_func
-
-    task_id = faas_manager.add_task(executor=executor)
-    
-    if 'params' in locals():
-        global params_prom_label
-        params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
-        params_prom_label.insert(0,params.__sizeof__())
-
-    return AsyncExecResponse(
-        status=AsyncExecStatus.WORKING,
-        res=None,
-        exec_id=AsyncExecId(faas_task_uuid=task_id),
-    ).dict()
+        return AsyncExecResponse(
+            status=AsyncExecStatus.WORKING,
+            res=None,
+            exec_id=AsyncExecId(faas_task_uuid=task_id),
+        ).dict()
 
 
 # GET /v1/faas/{faas_uuid}/status
@@ -226,44 +239,45 @@ async def get_faas_uuid_status(faas_task_uuid: str):
 
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
+    
+    global executor, executor_lock
+    with executor_lock:
+        status, executor = task
 
-    status, executor = task
+        if status == TaskState.OK:
+            if executor.lang == "PY":
+                exec_response = ExecResponse(
+                    ret_code=ExecReturnCode.SUCCESS, res=faas_parser.serialize(executor.res)
+                )
+            elif executor.lang == "C":
+                exec_response = ExecResponse(
+                    ret_code=ExecReturnCode.SUCCESS, res=faas_parser.any_to_b64(executor.res)
+                )
 
-    if status == TaskState.OK:
-        if executor.lang == "PY":
-            exec_response = ExecResponse(
-                ret_code=ExecReturnCode.SUCCESS, res=faas_parser.serialize(executor.res)
+            # Define async metrics global variables
+            global async_start_time
+            global async_end_time
+            async_start_time = executor.start_pyexec_time
+            async_end_time = executor.end_pyexec_time
+            response = AsyncExecResponse(
+                status=AsyncExecStatus.READY,
+                res=exec_response,
+                exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
             )
-        elif executor.lang == "C":
-            exec_response = ExecResponse(
-                ret_code=ExecReturnCode.SUCCESS, res=faas_parser.any_to_b64(executor.res)
+        elif status == TaskState.FAILED:
+            response = AsyncExecResponse(
+                status=AsyncExecStatus.FAILED,
+                res=None,
+                exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
+            )
+        else:
+            response = AsyncExecResponse(
+                status=AsyncExecStatus.WORKING,
+                res=None,
+                exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
             )
 
-        # Define async metrics global variables
-        global async_start_time
-        global async_end_time
-        # And get the values from task's executor
-        async_start_time = executor.start_pyexec_time
-        async_end_time = executor.end_pyexec_time
-        response = AsyncExecResponse(
-            status=AsyncExecStatus.READY,
-            res=exec_response,
-            exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
-        )
-    elif status == TaskState.FAILED:
-        response = AsyncExecResponse(
-            status=AsyncExecStatus.FAILED,
-            res=None,
-            exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
-        )
-    else:
-        response = AsyncExecResponse(
-            status=AsyncExecStatus.WORKING,
-            res=None,
-            exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
-        )
-
-    return response.dict()
+        return response.dict()
 
 def parse_params(faas_request):
     args = []
