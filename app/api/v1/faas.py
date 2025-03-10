@@ -78,7 +78,7 @@ class CognitFuncExecCollector(object):
         labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time', 'requirement_id', 'total_param_size']
 
         # Define sync metric labels 
-        gauge = GaugeMetricFamily("last_func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
+        gauge = GaugeMetricFamily("sr_last_func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
         if 'async_end_time' in globals() and isinstance(async_end_time, float):
             # Define variables for setting async labels
             self.exec_async_time = async_end_time - async_start_time
@@ -102,7 +102,7 @@ class CognitFuncExecCollector(object):
             
         # Add metric GAUGE for function status
         func_status_labels = ['func_hash', 'vm_id', 'total_param_size']
-        func_status_gauge = GaugeMetricFamily("func_status", "Function execution status", labels=func_status_labels)
+        func_status_gauge = GaugeMetricFamily("sr_func_status", "Function execution status", labels=func_status_labels)
         
         global executor
         if executor is not None:
@@ -111,9 +111,9 @@ class CognitFuncExecCollector(object):
             yield func_status_gauge
 
             # Add counters for executed, succeeded, and failed functions
-            executed_counter = CounterMetricFamily("func_executed_total", "Total number of executed functions", labels=['vm_id'])
-            succeeded_counter = CounterMetricFamily("func_succeeded_total", "Total number of succeeded functions", labels=['vm_id'])
-            failed_counter = CounterMetricFamily("func_failed_total", "Total number of failed functions", labels=['vm_id'])
+            executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id'])
+            succeeded_counter = CounterMetricFamily("sr_func_succeeded_total", "Total number of succeeded functions", labels=['vm_id'])
+            failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id'])
 
             executed_counter.add_metric([vmid], executor.get_executed_func_counter())
             succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
