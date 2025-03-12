@@ -1,6 +1,7 @@
 import inspect
 import logging
 import os
+import sys
 
 class CognitLogger:
     LOGGER_NAME = "cognit-logger"
@@ -28,6 +29,16 @@ class CognitLogger:
             fileHandler = logging.FileHandler("{0}/{1}.log".format(self.LOG_PATH, self.LOG_FILENAME))
             fileHandler.setFormatter(formatter)
             self.logger.addHandler(fileHandler)
+            
+        # Set global exception hook for uncaught exceptions
+        sys.excepthook = self._unhandled_exception
+
+    def _unhandled_exception(self, exc_type, exc_value, exc_traceback):
+        """Handles uncaught exceptions and logs them."""
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_traceback)
+            return
+        self.logger.critical("Uncaught Exception", exc_info=(exc_type, exc_value, exc_traceback))
 
     def _log(self, level: int, message):
         if self.verbose:

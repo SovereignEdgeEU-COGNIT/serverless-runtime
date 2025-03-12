@@ -15,6 +15,7 @@ from modules._pyexec import PyExec
 from .daas import func_list
 import logging, os
 from threading import Lock
+import sys
 
 cognit_logger = CognitLogger()
 cognit_logger.set_level(logging.DEBUG)
@@ -35,6 +36,7 @@ def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, 
     return decoded_fc, decoded_params
 
 def get_vmid():
+    return "11"
     with open("/var/run/one-context/one_env", "r") as file_one:
         patt = "VMID="
         for l in file_one:
@@ -62,66 +64,70 @@ class CognitFuncExecCollector(object):
         pass
 
     def collect(self):
-        vmid = get_vmid()
-        if 'off_func' in globals():
-            self.fc_hash = off_func.fc_hash
-        else:
-            self.fc_hash = "000-000-000"
-        if 'sync_start_time' in globals():
-            self.s_st_t = time.ctime(sync_start_time)
-        else:
-            self.s_st_t = "0"
-        if 'sync_end_time' in globals():
-            self.s_end_t = time.ctime(sync_end_time)
-        else:
-            self.s_end_t = "0"
-        labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time', 'requirement_id', 'total_param_size']
+        try:
+            vmid = get_vmid()
+            if 'off_func' in globals():
+                self.fc_hash = off_func.fc_hash
+            else:
+                self.fc_hash = "000-000-000"
+            if 'sync_start_time' in globals():
+                self.s_st_t = time.ctime(sync_start_time)
+            else:
+                self.s_st_t = "0"
+            if 'sync_end_time' in globals():
+                self.s_end_t = time.ctime(sync_end_time)
+            else:
+                self.s_end_t = "0"
+            labels = ['vm_id', 'func_type', 'func_hash', 'start_time', 'end_time', 'requirement_id', 'total_param_size']
 
-        # Define sync metric labels 
-        gauge = GaugeMetricFamily("sr_last_func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
-        if 'async_end_time' in globals() and isinstance(async_end_time, float):
-            # Define variables for setting async labels
-            self.exec_async_time = async_end_time - async_start_time
-            self.a_st_t = time.ctime(async_start_time)
-            self.a_end_t = time.ctime(async_end_time)
-            # Add async metric
-            metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t, app_req_id, str(sum(params_prom_label))]
-            gauge.add_metric(metric_label_values, self.exec_async_time)
-            yield gauge 
-        elif 'sync_end_time' in globals() and isinstance(sync_end_time, float) and\
-            'sync_start_time' in globals() and isinstance(sync_start_time, float):
-            # Define variables for setting sync labels    
-            self.exec_time = sync_end_time - sync_start_time
-            # Add sync metric
-            metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t, app_req_id, str(sum(params_prom_label))]
-            gauge.add_metric(metric_label_values, self.exec_time)
-            yield gauge
-        else:    
-            self.exec_time = 0.0
-            self.exec_async_time = 0.0
+            # Define sync metric labels 
+            gauge = GaugeMetricFamily("sr_last_func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
+            if 'async_end_time' in globals() and isinstance(async_end_time, float):
+                # Define variables for setting async labels
+                self.exec_async_time = async_end_time - async_start_time
+                self.a_st_t = time.ctime(async_start_time)
+                self.a_end_t = time.ctime(async_end_time)
+                # Add async metric
+                metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t, app_req_id, str(sum(params_prom_label))]
+                gauge.add_metric(metric_label_values, self.exec_async_time)
+                yield gauge 
+            elif 'sync_end_time' in globals() and isinstance(sync_end_time, float) and\
+                'sync_start_time' in globals() and isinstance(sync_start_time, float):
+                # Define variables for setting sync labels    
+                self.exec_time = sync_end_time - sync_start_time
+                # Add sync metric
+                metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t, app_req_id, str(sum(params_prom_label))]
+                gauge.add_metric(metric_label_values, self.exec_time)
+                yield gauge
+            else:    
+                self.exec_time = 0.0
+                self.exec_async_time = 0.0
+                
+            # Add metric GAUGE for function status
+            func_status_labels = ['func_hash', 'vm_id', 'total_param_size']
+            func_status_gauge = GaugeMetricFamily("sr_func_status", "Function execution status", labels=func_status_labels)
             
-        # Add metric GAUGE for function status
-        func_status_labels = ['func_hash', 'vm_id', 'total_param_size']
-        func_status_gauge = GaugeMetricFamily("sr_func_status", "Function execution status", labels=func_status_labels)
-        
-        global executor
-        if executor is not None:
-            func_status = executor.get_status()
-            func_status_gauge.add_metric([off_func.fc_hash, vmid, str(sum(params_prom_label))], func_status)
-            yield func_status_gauge
+            global executor
+            if executor is not None:
+                func_status = executor.get_status()
+                func_status_gauge.add_metric([off_func.fc_hash, vmid, str(sum(params_prom_label))], func_status)
+                yield func_status_gauge
 
-            # Add counters for executed, succeeded, and failed functions
-            executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id'])
-            succeeded_counter = CounterMetricFamily("sr_func_succeeded_total", "Total number of succeeded functions", labels=['vm_id'])
-            failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id'])
+                # Add counters for executed, succeeded, and failed functions
+                executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id'])
+                succeeded_counter = CounterMetricFamily("sr_func_succeeded_total", "Total number of succeeded functions", labels=['vm_id'])
+                failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id'])
 
-            executed_counter.add_metric([vmid], executor.get_executed_func_counter())
-            succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
-            failed_counter.add_metric([vmid], executor.get_failed_func_counter())
+                executed_counter.add_metric([vmid], executor.get_executed_func_counter())
+                succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
+                failed_counter.add_metric([vmid], executor.get_failed_func_counter())
 
-            yield executed_counter
-            yield succeeded_counter
-            yield failed_counter
+                yield executed_counter
+                yield succeeded_counter
+                yield failed_counter
+        except Exception as e:
+            # Manually call sys.excepthook to log the exception
+            sys.excepthook(type(e), e, e.__traceback__)
 
 # POST /v1/faas/execute-sync
 @faas_router.post("/execute-sync")

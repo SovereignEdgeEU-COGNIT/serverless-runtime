@@ -58,7 +58,7 @@ class PyExec(Executor):
             self.status = self.STATUS_DICT.get("IDLE", 0)
             return self
         except Exception as e:
-            cognit_logger.info(e)
+            cognit_logger.error(e) # TEST4
             # Increment the class-level failed counter
             self.increase_counter("failed_func_counter")
             self.status = self.STATUS_DICT.get("IDLE", 0)
