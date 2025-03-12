@@ -1,6 +1,6 @@
 from api.v1.daas import daas_router
 from api.v1.faas import faas_router, CognitFuncExecCollector
-from fastapi import FastAPI, Response
+from fastapi import FastAPI, Response, Request
 import prometheus_client
 from prometheus_client.core import GaugeMetricFamily, REGISTRY
 from prometheus_client import start_http_server, multiprocess, CollectorRegistry
@@ -10,14 +10,31 @@ from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
 import requests
 from modules._logger import CognitLogger
 
+from uvicorn.config import LOGGING_CONFIG  # Import Uvicorn's logging config
+import traceback
+from starlette.responses import JSONResponse
+
 # Initialize logger
 cognit_logger = CognitLogger()
+# Configure Uvicorn to log errors using your logger
+LOGGING_CONFIG["loggers"]["uvicorn.error"]["handlers"] = ["default"]
+LOGGING_CONFIG["loggers"]["uvicorn.access"]["handlers"] = ["default"]
 
 SR_PORT = 8000
 PROM_PORT = 9100
 
 app = FastAPI(title="Serverless Runtime")
 
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Handles all uncaught exceptions globally and logs them."""
+    cognit_logger.critical(f"Unhandled exception: {exc}\n{traceback.format_exc()}")
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
+    
 @app.get("/")
 async def root():
     return "Main routes: \
