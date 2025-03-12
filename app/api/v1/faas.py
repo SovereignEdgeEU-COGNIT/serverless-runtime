@@ -35,7 +35,6 @@ def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, 
     return decoded_fc, decoded_params
 
 def get_vmid():
-    return "11"
     with open("/var/run/one-context/one_env", "r") as file_one:
         patt = "VMID="
         for l in file_one:
