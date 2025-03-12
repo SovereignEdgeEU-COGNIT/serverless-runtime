@@ -35,6 +35,7 @@ def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, 
     return decoded_fc, decoded_params
 
 def get_vmid():
+    return "11"
     with open("/var/run/one-context/one_env", "r") as file_one:
         patt = "VMID="
         for l in file_one:
@@ -127,64 +128,89 @@ class CognitFuncExecCollector(object):
 @faas_router.post("/execute-sync")
 async def execute_sync(offloaded_func: ExecSyncParams):
     global executor
-    
-    # Validate and deserialize the request based on the language
-    if offloaded_func.lang == "PY":
-        try:
-            global app_req_id
-            app_req_id = str(offloaded_func.app_req_id)
-            fc, params = deserialize_py_fc(offloaded_func)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing sync PY function. More details; {0}".format(e))
-        if not callable(fc):
-            raise HTTPException(status_code=400, detail=" Not callable function")
+    global executor_lock
+    global app_req_id
 
-        executor = PyExec(fc=fc, params=params)
-
-    elif offloaded_func.lang == "C":
-        try:
-            fc, params = deserialize_c_fc(offloaded_func)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing sync C function. More details; {0}".format(e))
-        executor = CExec(fc=fc, params=params)
-    else:
-        raise HTTPException(
-            status_code=400, detail="Unsupported language. Supported languages: PY, C"
-        )
-
-    if offloaded_func.fc_hash != "":
-        cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
-    global off_func
-    off_func = offloaded_func
-    
-    if 'params' in locals():
-        global params_prom_label
-        params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
-        params_prom_label.insert(0,params.__sizeof__())
-
-    # Define sync metric exposure global variables
-    global sync_start_time
-    global sync_end_time
-    # Switch to not async mode for Prometheus metrics
-    if 'async_end_time' in globals():
-        global async_end_time
-        del async_end_time
-
-    # Once the executor is created, run it and get the result blocking the thread
-    executor.run()
-    sync_start_time = executor.start_pyexec_time
-    sync_end_time = executor.end_pyexec_time
-
-    if offloaded_func.lang == "PY":
-        b64_res = faas_parser.serialize(executor.get_result())
-    if offloaded_func.lang == "C":
-        b64_res = faas_parser.any_to_b64(executor.get_result())
+    with executor_lock:  # Ensure proper locking
+        cognit_logger.debug(f"Before execution, executor: {executor}")
         
-    result = ExecResponse(res=b64_res, ret_code=executor.get_ret_code(), err= executor.get_err())
+        executor = None  # Reset executor before assignment
 
-    cognit_logger.debug(f"Result: {result}")
+        if offloaded_func.lang == "PY":
+            try:
+                app_req_id = str(offloaded_func.app_req_id)
+                fc, params = deserialize_py_fc(offloaded_func)
+            except Exception as e:
+                cognit_logger.error(f"Error deserializing sync PY function: {e}")
+                raise HTTPException(status_code=400, detail=f"Error deserializing sync PY function: {e}")
 
-    return result.dict()
+            if not callable(fc):
+                cognit_logger.error("Function is not callable")
+                raise HTTPException(status_code=400, detail="Not callable function")
+
+            executor = PyExec(fc=fc, params=params)
+            cognit_logger.debug("PyExec created successfully")
+
+        elif offloaded_func.lang == "C":
+            try:
+                fc, params = deserialize_c_fc(offloaded_func)
+            except Exception as e:
+                cognit_logger.error(f"Error deserializing sync C function: {e}")
+                raise HTTPException(status_code=400, detail=f"Error deserializing sync C function: {e}")
+            executor = CExec(fc=fc, params=params)
+
+        else:
+            cognit_logger.error("Unsupported language")
+            raise HTTPException(status_code=400, detail="Unsupported language. Supported: PY, C")
+
+        if not executor:
+            cognit_logger.error("Executor is None after assignment")
+            raise HTTPException(status_code=500, detail="Internal Server Error: Executor is None")
+
+        cognit_logger.debug(f"Executor assigned: {executor}")
+
+        global off_func
+        off_func = offloaded_func
+
+        if 'params' in locals():
+            global params_prom_label
+            params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
+            params_prom_label.insert(0, params.__sizeof__())
+
+        # Define sync metric exposure global variables
+        global sync_start_time
+        global sync_end_time
+
+        # Switch to not async mode for Prometheus metrics
+        if 'async_end_time' in globals():
+            global async_end_time
+            del async_end_time
+
+        # Run executor within lock
+        try:
+            executor.run()
+            sync_start_time = executor.start_pyexec_time
+            sync_end_time = executor.end_pyexec_time
+        except Exception as e:
+            cognit_logger.error(f"Unhandled exception during execution: {e}")
+            raise HTTPException(status_code=500, detail=f"Execution failed: {e}")
+
+        # Serialize result
+        try:
+            if offloaded_func.lang == "PY":
+                b64_res = faas_parser.serialize(executor.get_result())
+            else:  # C case
+                b64_res = faas_parser.any_to_b64(executor.get_result())
+
+            result = ExecResponse(res=b64_res, ret_code=executor.get_ret_code(), err=executor.get_err())
+            cognit_logger.debug(f"Execution result: {result}")
+
+            return result.dict()
+
+        except Exception as e:
+            cognit_logger.error(f"Error serializing response: {e}")
+            raise HTTPException(status_code=500, detail=f"Error serializing response: {e}")
+
 
 # POST /v1/faas/execute-async
 @faas_router.post("/execute-async")
