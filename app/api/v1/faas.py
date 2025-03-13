@@ -105,7 +105,7 @@ class CognitFuncExecCollector(object):
                 
             # Add metric GAUGE for function status
             func_status_labels = ['func_hash', 'vm_id', 'total_param_size']
-            func_status_gauge = GaugeMetricFamily("sr_func_status", "Function execution status", labels=func_status_labels)
+            func_status_gauge = GaugeMetricFamily("sr_func_status", "Function execution status (RUNNING : 1.0, IDLE: 0.0)", labels=func_status_labels)
             
             global executor
             if executor is not None:
