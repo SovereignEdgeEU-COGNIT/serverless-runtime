@@ -1,7 +1,7 @@
 from typing import Any, Tuple
 import time, re, socket
 from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, Histogram
 from . import nano_pb2
 from google.protobuf.json_format import Parse, MessageToJson
 import json
@@ -58,6 +58,23 @@ def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, A
     decoded_fc = faas_parser.b64_to_str(input_fc.fc)
     decoded_params = [faas_parser.b64_to_str(param) for param in input_fc.params]
     return decoded_fc, decoded_params
+
+
+# Define histograms
+execution_time_histogram = Histogram(
+    'sr_histogram_func_exec_time_seconds',
+    'Histogram of function execution time',
+    buckets=[1, 5, 10],
+    labelnames=['vmid', 'function_outcome']
+)
+
+input_size_histogram = Histogram(
+    'sr_histogram_func_input_size_bytes',
+    'Histogram of function input size',
+    buckets=[1024, 1024 * 1024, 1024 * 1024 * 1024], # KB, MB, GB
+    labelnames=['vmid', 'function_outcome']
+)
+
 
 class CognitFuncExecCollector(object):
     def __init__(self):
@@ -125,6 +142,29 @@ class CognitFuncExecCollector(object):
                 yield executed_counter
                 yield succeeded_counter
                 yield failed_counter
+                
+                outcome = "success" if executor.ret_code == ExecReturnCode.SUCCESS else "error"
+                
+                # Record input size
+                if "params_prom_label" in globals() or params_prom_label:
+                    input_size = sum(params_prom_label)
+                    cognit_logger.warning(f"Recording input size: {input_size}")  # Debug log
+                    if input_size > 0:
+                        input_size_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(input_size))
+                    else:
+                        cognit_logger.warning("Warning: params_prom_label sum is zero")
+                # input_size_histogram.labels(vmid=vmid, 
+                #                             function_outcome=outcome).observe(sum(params_prom_label))
+                
+                # Record execution time
+                if hasattr(self, "exec_time") and isinstance(self.exec_time, (int, float)) and self.exec_time > 0:
+                    cognit_logger.warning(f"Recording execution time: {self.exec_time}")  # Debug log
+                    execution_time_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(self.exec_time))
+                else:
+                    cognit_logger.warning(f"Warning: exec_time is missing or invalid: {self.exec_time}")
+                
+                # execution_time_histogram.labels(vmid=vmid, function_outcome=outcome).observe(self.exec_time)
+                
         except Exception as e:
             # Manually call sys.excepthook to log the exception
             sys.excepthook(type(e), e, e.__traceback__)

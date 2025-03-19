@@ -1,5 +1,5 @@
 from api.v1.daas import daas_router
-from api.v1.faas import faas_router, CognitFuncExecCollector
+from api.v1.faas import faas_router, CognitFuncExecCollector, execution_time_histogram, input_size_histogram
 from fastapi import FastAPI, Response, Request
 import prometheus_client
 from prometheus_client.core import GaugeMetricFamily, REGISTRY
@@ -104,6 +104,8 @@ def initialize_prometheus():
     cognit_logger.debug("Initializing Prometheus...")
     # Create Prometheus registry
     r = CollectorRegistry()
+    r.register(execution_time_histogram)
+    r.register(input_size_histogram)
     # Register COGNIT collector within the registry
     r.register(CognitFuncExecCollector())
 
