@@ -57,8 +57,8 @@ def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, A
 
 def pb_serialize_result(result):
     # Construct a FaasResponse object and respond
-    faas_response = nano_pb2.FaasResponse()
-    response_param = faas_response.res
+    response_param = nano_pb2.MyParam()
+    
 
     # Determine the type of result and assign it appropriately
     if isinstance(result, float):
@@ -79,16 +79,16 @@ def pb_serialize_result(result):
     else:
         return "Unsupported return type", 400
     
-    return faas_response
+    return response_param.SerializeToString()
 
 def deserialize_protobuf_params(params):
     
     param = nano_pb2.MyParam()
     args = []
 
-    for param_data in params:
-        
-        param.ParseFromString(param_data)
+    for encoded_param in params:
+        param_decoded = faas_parser.deserialize_pb(encoded_param)
+        param.ParseFromString(param_decoded)
         
         if param.WhichOneof('param') == 'my_double':
             values = param.my_double.values
@@ -125,23 +125,36 @@ def deserialize_protobuf_params(params):
 
         # Añadimos valores al vector args
         args.append(values if len(values) > 1 else values[0])
- 
     return args
+
+def make_fc_executable(fc_str):
+    # Buscar el nombre de la función con regex
+    match = re.search(r"def\s+(\w+)\s*\(", fc_str)
+
+    if match:
+        fc_name = match.group(1)  # Extrae el nombre de la función
+        exec(fc_str, globals())  # Ejecutar el código
+        fc = globals().get(fc_name)
+    
+    return fc
+    
 
 def deserialize_protobuf_fc(input_fc: ExecSyncParams):
     # Parse request body to MyFunc object
     cognit_logger.debug("Parsing function data...")
 
     my_func = nano_pb2.MyFunc()
-    my_func.ParseFromString(input_fc.fc)
+    decoded_fc = faas_parser.deserialize_pb(input_fc.fc)
+    my_func.ParseFromString(decoded_fc)
     
     cognit_logger.debug("Function code: ")
     cognit_logger.debug(my_func.fc_code)
     
-    params = deserialize_protobuf_params(input_fc.params)
-        
+    args = deserialize_protobuf_params(input_fc.params)
+    cognit_logger.debug("Args: " + str(args))
+   
     # Respondemos con el mismo objeto modificado
-    return myfunc.fc_code, params
+    return make_fc_executable(my_func.fc_code), args
 
 
 class CognitFuncExecCollector(object):
@@ -224,13 +237,14 @@ async def execute_sync(offloaded_func: ExecSyncParams):
     elif offloaded_func.lang == "C":
         try:
             #global app_req_id
-            #app_req_id = str(offloaded_func.app_req_id)
+            app_req_id = str(offloaded_func.app_req_id)
             fc, params = deserialize_protobuf_fc(offloaded_func)
         except Exception as e:
             raise HTTPException(status_code=400, detail="Error deserializing sync PY function. More details; {0}".format(e))
+        
+        
         if not callable(fc):
             raise HTTPException(status_code=400, detail=" Not callable function")
-
         executor = PyExec(fc=fc, params=params)
     else:
         raise HTTPException(
@@ -264,8 +278,8 @@ async def execute_sync(offloaded_func: ExecSyncParams):
     if offloaded_func.lang == "C_deprecated":
         b64_res = faas_parser.any_to_b64(executor.get_result())
     if offloaded_func.lang == "C":
-        b64_res = pb_serialize_result(executor.get_result())
-    i
+        b64_res = faas_parser.any_to_b64(pb_serialize_result(executor.get_result()))
+    
         
     result = ExecResponse(res=b64_res, ret_code=executor.get_ret_code(), err= executor.get_err())
 
