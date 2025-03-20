@@ -13,7 +13,6 @@ from modules._faas_manager import FaasManager, TaskState
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec #, start_pyexec_time, end_pyexec_time
-from .daas import func_list
 import modules._pyexec as p
 import logging, os
 
@@ -55,6 +54,95 @@ def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, A
     decoded_fc = faas_parser.b64_to_str(input_fc.fc)
     decoded_params = [faas_parser.b64_to_str(param) for param in input_fc.params]
     return decoded_fc, decoded_params
+
+def pb_serialize_result(result):
+    # Construct a FaasResponse object and respond
+    faas_response = nano_pb2.FaasResponse()
+    response_param = faas_response.res
+
+    # Determine the type of result and assign it appropriately
+    if isinstance(result, float):
+        response_param.my_float.values.extend([result])
+    elif isinstance(result, int):
+        response_param.my_int32.values.extend([result])  # Assuming 32-bit int, change to my_int64 for larger values
+    elif isinstance(result, bool):
+        response_param.my_bool.values.extend([result])
+    elif isinstance(result, list):
+        if all(isinstance(x, float) for x in result):
+            response_param.my_double.values.extend(result)
+        elif all(isinstance(x, int) for x in result):
+            response_param.my_int32.values.extend(result)  # Adjust type as needed
+        else:
+            return "Unsupported list type", 400
+    elif isinstance(result, str):
+        response_param.my_string = result
+    else:
+        return "Unsupported return type", 400
+    
+    return faas_response
+
+def deserialize_protobuf_params(params):
+    
+    param = nano_pb2.MyParam()
+    args = []
+
+    for param_data in params:
+        
+        param.ParseFromString(param_data)
+        
+        if param.WhichOneof('param') == 'my_double':
+            values = param.my_double.values
+        elif param.WhichOneof('param') == 'my_float':
+            values = param.my_float.values
+        elif param.WhichOneof('param') == 'my_int32':
+            values = param.my_int32.values
+        elif param.WhichOneof('param') == 'my_int64':
+            values = param.my_int64.values
+        elif param.WhichOneof('param') == 'my_uint32':
+            values = param.my_uint32.values
+        elif param.WhichOneof('param') == 'my_uint64':
+            values = param.my_uint64.values
+        elif param.WhichOneof('param') == 'my_sint32':
+            values = param.my_sint32.values
+        elif param.WhichOneof('param') == 'my_sint64':
+            values = param.my_sint64.values
+        elif param.WhichOneof('param') == 'my_fixed32':
+            values = param.my_fixed32.values
+        elif param.WhichOneof('param') == 'my_fixed64':
+            values = param.my_fixed64.values
+        elif param.WhichOneof('param') == 'my_sfixed32':
+            values = param.my_sfixed32.values
+        elif param.WhichOneof('param') == 'my_sfixed64':
+            values = param.my_sfixed64.values
+        elif param.WhichOneof('param') == 'my_bool':
+            values = param.my_bool.values
+        elif param.WhichOneof('param') == 'my_string':
+            values = [param.my_string]
+        elif param.WhichOneof('param') == 'my_bytes':
+            values = [param.my_bytes]
+        else:
+            values = []
+
+        # Añadimos valores al vector args
+        args.append(values if len(values) > 1 else values[0])
+ 
+    return args
+
+def deserialize_protobuf_fc(input_fc: ExecSyncParams):
+    # Parse request body to MyFunc object
+    cognit_logger.debug("Parsing function data...")
+
+    my_func = nano_pb2.MyFunc()
+    my_func.ParseFromString(input_fc.fc)
+    
+    cognit_logger.debug("Function code: ")
+    cognit_logger.debug(my_func.fc_code)
+    
+    params = deserialize_protobuf_params(input_fc.params)
+        
+    # Respondemos con el mismo objeto modificado
+    return myfunc.fc_code, params
+
 
 class CognitFuncExecCollector(object):
     def __init__(self):
@@ -126,14 +214,24 @@ async def execute_sync(offloaded_func: ExecSyncParams):
             raise HTTPException(status_code=400, detail=" Not callable function")
 
         executor = PyExec(fc=fc, params=params)
-
-    elif offloaded_func.lang == "C":
+    elif offloaded_func.lang == "C_deprecated":
         try:
             fc, params = deserialize_c_fc(offloaded_func)
         except Exception as e:
             raise HTTPException(status_code=400, detail="Error deserializing sync C function. More details; {0}".format(e))
         executor = CExec(fc=fc, params=params)
         pass
+    elif offloaded_func.lang == "C":
+        try:
+            #global app_req_id
+            #app_req_id = str(offloaded_func.app_req_id)
+            fc, params = deserialize_protobuf_fc(offloaded_func)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail="Error deserializing sync PY function. More details; {0}".format(e))
+        if not callable(fc):
+            raise HTTPException(status_code=400, detail=" Not callable function")
+
+        executor = PyExec(fc=fc, params=params)
     else:
         raise HTTPException(
             status_code=400, detail="Unsupported language. Supported languages: PY, C"
@@ -163,8 +261,11 @@ async def execute_sync(offloaded_func: ExecSyncParams):
 
     if offloaded_func.lang == "PY":
         b64_res = faas_parser.serialize(executor.get_result())
-    if offloaded_func.lang == "C":
+    if offloaded_func.lang == "C_deprecated":
         b64_res = faas_parser.any_to_b64(executor.get_result())
+    if offloaded_func.lang == "C":
+        b64_res = pb_serialize_result(executor.get_result())
+    i
         
     result = ExecResponse(res=b64_res, ret_code=executor.get_ret_code(), err= executor.get_err())
 
@@ -265,110 +366,5 @@ async def get_faas_uuid_status(faas_task_uuid: str):
 
     return response.dict()
 
-def parse_params(faas_request):
-    args = []
-    for param in faas_request.params:
-        if param.WhichOneof('param') == 'my_double':
-            values = param.my_double.values
-        elif param.WhichOneof('param') == 'my_float':
-            values = param.my_float.values
-        elif param.WhichOneof('param') == 'my_int32':
-            values = param.my_int32.values
-        elif param.WhichOneof('param') == 'my_int64':
-            values = param.my_int64.values
-        elif param.WhichOneof('param') == 'my_uint32':
-            values = param.my_uint32.values
-        elif param.WhichOneof('param') == 'my_uint64':
-            values = param.my_uint64.values
-        elif param.WhichOneof('param') == 'my_sint32':
-            values = param.my_sint32.values
-        elif param.WhichOneof('param') == 'my_sint64':
-            values = param.my_sint64.values
-        elif param.WhichOneof('param') == 'my_fixed32':
-            values = param.my_fixed32.values
-        elif param.WhichOneof('param') == 'my_fixed64':
-            values = param.my_fixed64.values
-        elif param.WhichOneof('param') == 'my_sfixed32':
-            values = param.my_sfixed32.values
-        elif param.WhichOneof('param') == 'my_sfixed64':
-            values = param.my_sfixed64.values
-        elif param.WhichOneof('param') == 'my_bool':
-            values = param.my_bool.values
-        elif param.WhichOneof('param') == 'my_string':
-            values = [param.my_string]
-        else:
-            values = []
-
-        # Añadimos valores al vector args
-        args.append(values if len(values) > 1 else values[0])
     
-    return args
-
-def parse_result(result):
-    # Construct a FaasResponse object and respond
-    faas_response = nano_pb2.FaasResponse()
-    response_param = faas_response.res
-
-    # Determine the type of result and assign it appropriately
-    if isinstance(result, float):
-        response_param.my_float.values.extend([result])
-    elif isinstance(result, int):
-        response_param.my_int32.values.extend([result])  # Assuming 32-bit int, change to my_int64 for larger values
-    elif isinstance(result, bool):
-        response_param.my_bool.values.extend([result])
-    elif isinstance(result, list):
-        if all(isinstance(x, float) for x in result):
-            response_param.my_double.values.extend(result)
-        elif all(isinstance(x, int) for x in result):
-            response_param.my_int32.values.extend(result)  # Adjust type as needed
-        else:
-            return "Unsupported list type", 400
-    elif isinstance(result, str):
-        response_param.my_string = result
-    else:
-        return "Unsupported return type", 400
-    
-    return faas_response
-
-#POST /v1/faas/c/faas_request
-@faas_router.post("/c/faas_request")
-def faas_request(data: bytes = Body(..., media_type="application/octet-stream")):
-    global func_list
-    print(f"Bytes recibidos: {data.hex()}")  # Muestra los datos binarios
-
-    cognit_logger.debug("Parsing FaaS request...")
-    # Parse request body to FaasRequest objeto 
-    faas_request = nano_pb2.FaasRequest()
-    faas_request.ParseFromString(data)
-
-    
-    # Parse params
-    args = parse_params(faas_request)
-    
-    my_bytes = faas_request.my_bytes
-    if len(my_bytes) > 0:
-        args.insert(faas_request.bytes_pos, my_bytes)
-    cognit_logger.debug("Looking for function with ID: " + str(faas_request.fc_id))
-    # Find corresponding function in global list
-    target_func = next((func for func in func_list if func.fc_id == faas_request.fc_id), None)
-    if not target_func:
-        return "Function not found", 404
-
-    # Call function with arguments
-    func_name = target_func.fc_name
-    cognit_logger.debug("Function found! Name: " + func_name)
-    
-    cognit_logger.debug("Importing function code...")
-    # Execute code to import the function to global dictionary
-    exec(target_func.fc_code, globals())
-    
-    cognit_logger.debug("Executing Function " + func_name + "with arguments " + str(args))
-    result = globals()[func_name](*args)
-    cognit_logger.debug("Result: " + str(result))
-    
-    cognit_logger.debug("Serializing result...")
-    #Parse result
-    faas_response = parse_result(result)
-    
-    return Response(content=faas_response.SerializeToString(), media_type="application/octet-stream")
 
