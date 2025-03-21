@@ -227,20 +227,13 @@ async def execute_sync(offloaded_func: ExecSyncParams):
             raise HTTPException(status_code=400, detail=" Not callable function")
 
         executor = PyExec(fc=fc, params=params)
-    elif offloaded_func.lang == "C_deprecated":
-        try:
-            fc, params = deserialize_c_fc(offloaded_func)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing sync C function. More details; {0}".format(e))
-        executor = CExec(fc=fc, params=params)
-        pass
     elif offloaded_func.lang == "C":
         try:
             #global app_req_id
             app_req_id = str(offloaded_func.app_req_id)
             fc, params = deserialize_protobuf_fc(offloaded_func)
         except Exception as e:
-            raise HTTPException(status_code=400, detail="Error deserializing sync PY function. More details; {0}".format(e))
+            raise HTTPException(status_code=400, detail="Error deserializing sync C function. More details; {0}".format(e))
         
         
         if not callable(fc):
@@ -275,8 +268,6 @@ async def execute_sync(offloaded_func: ExecSyncParams):
 
     if offloaded_func.lang == "PY":
         b64_res = faas_parser.serialize(executor.get_result())
-    if offloaded_func.lang == "C_deprecated":
-        b64_res = faas_parser.any_to_b64(executor.get_result())
     if offloaded_func.lang == "C":
         b64_res = faas_parser.any_to_b64(pb_serialize_result(executor.get_result()))
     
