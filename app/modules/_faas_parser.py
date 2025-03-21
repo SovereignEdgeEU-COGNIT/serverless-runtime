@@ -42,6 +42,6 @@ class FaasParser:
         return decoded_str
 
     def any_to_b64(self, input: Any) -> str:
-        # Encode it from base64
-        encoded_str = base64.b64encode(str(input).encode("utf-8"))
+        # Encode it to base64
+        encoded_str = base64.b64encode(input).decode("utf-8")
         return encoded_str
