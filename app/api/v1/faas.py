@@ -75,6 +75,34 @@ input_size_histogram = Histogram(
     labelnames=['vmid', 'function_outcome']
 )
 
+def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
+    """Updates Prometheus metrics immediately after execution."""
+    try:
+        if asyncExecutionSuccess not in [True,False]:
+            outcome = "success" if executor.get_ret_code() == ExecReturnCode.SUCCESS else "error"
+        else:
+            outcome = asyncExecutionSuccess
+
+        # Record input size
+        if "params_prom_label" in globals() and params_prom_label:
+            input_size = sum(params_prom_label)
+            cognit_logger.warning(f"Recording input size: {input_size}")
+            if input_size > 0:
+                input_size_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(input_size))
+            else:
+                cognit_logger.warning("Warning: params_prom_label sum is zero")
+
+        # Record execution time
+        exec_time = executor.end_pyexec_time - executor.start_pyexec_time
+        if isinstance(exec_time, (int, float)) and exec_time > 0:
+            cognit_logger.warning(f"Recording execution time: {exec_time}")
+            execution_time_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(exec_time))
+        else:
+            cognit_logger.warning(f"Warning: exec_time is missing or invalid: {exec_time}")
+
+    except Exception as e:
+        cognit_logger.error(f"Error updating metrics: {e}")
+
 
 class CognitFuncExecCollector(object):
     def __init__(self):
@@ -143,27 +171,6 @@ class CognitFuncExecCollector(object):
                 yield succeeded_counter
                 yield failed_counter
                 
-                outcome = "success" if executor.ret_code == ExecReturnCode.SUCCESS else "error"
-                
-                # Record input size
-                if "params_prom_label" in globals() or params_prom_label:
-                    input_size = sum(params_prom_label)
-                    cognit_logger.warning(f"Recording input size: {input_size}")  # Debug log
-                    if input_size > 0:
-                        input_size_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(input_size))
-                    else:
-                        cognit_logger.warning("Warning: params_prom_label sum is zero")
-                # input_size_histogram.labels(vmid=vmid, 
-                #                             function_outcome=outcome).observe(sum(params_prom_label))
-                
-                # Record execution time
-                if hasattr(self, "exec_time") and isinstance(self.exec_time, (int, float)) and self.exec_time > 0:
-                    cognit_logger.warning(f"Recording execution time: {self.exec_time}")  # Debug log
-                    execution_time_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(self.exec_time))
-                else:
-                    cognit_logger.warning(f"Warning: exec_time is missing or invalid: {self.exec_time}")
-                
-                # execution_time_histogram.labels(vmid=vmid, function_outcome=outcome).observe(self.exec_time)
                 
         except Exception as e:
             # Manually call sys.excepthook to log the exception
@@ -177,7 +184,7 @@ async def execute_sync(offloaded_func: ExecSyncParams):
     global app_req_id
 
     with executor_lock:  # Ensure proper locking
-        cognit_logger.debug(f"Before execution, executor: {executor}")
+        # cognit_logger.debug(f"Before execution, executor: {executor}")
         
         executor = None  # Reset executor before assignment
 
@@ -212,7 +219,7 @@ async def execute_sync(offloaded_func: ExecSyncParams):
             cognit_logger.error("Executor is None after assignment")
             raise HTTPException(status_code=500, detail="Internal Server Error: Executor is None")
 
-        cognit_logger.debug(f"Executor assigned: {executor}")
+        # cognit_logger.debug(f"Executor assigned: {executor}")
 
         global off_func
         off_func = offloaded_func
@@ -236,6 +243,7 @@ async def execute_sync(offloaded_func: ExecSyncParams):
             executor.run()
             sync_start_time = executor.start_pyexec_time
             sync_end_time = executor.end_pyexec_time
+            update_histogram_metrics(executor, get_vmid())
         except Exception as e:
             cognit_logger.error(f"Unhandled exception during execution: {e}")
             raise HTTPException(status_code=500, detail=f"Execution failed: {e}")
@@ -347,6 +355,8 @@ async def get_faas_uuid_status(faas_task_uuid: str):
                 res=None,
                 exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
             )
+        if status != AsyncExecStatus.WORKING:
+            update_histogram_metrics(executor, get_vmid(), status==TaskState.OK)
 
         return response.dict()
 
