@@ -49,6 +49,9 @@ class RabbitMQClient:
         if self._connect_to_broker() == -1:
             self.broker_logger.error("Unable to connect to RabbitMQ broker. Exiting...")
             exit(-1)
+
+        # Declare queue
+        self.channel.queue_declare(queue=self.queue)
         
         # Set callback to handle incoming messages
         self.channel.basic_consume(queue=self.queue, on_message_callback=self._execute_callback)
