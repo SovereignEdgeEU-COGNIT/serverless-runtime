@@ -40,7 +40,7 @@ def test_connect_to_broker(mock_pika, rabbitmq_client):
     assert result == 0
     
     # Assert that the broker_logger's info method was called with the correct message
-    rabbitmq_client.broker_logger.info.assert_called_with("Connected to RabbitMQ client.")
+    rabbitmq_client.broker_logger.info.assert_called_with("Connected to RabbitMQ broker.")
 
 
 from unittest.mock import Mock
@@ -81,7 +81,7 @@ def test_execute_callback(mock_post, rabbitmq_client):
         "request_id": "request_id"
     }
 
-    mock_post.return_value.json.return_value = {"res": "success", "ret_code": ExecReturnCode.SUCCESS, "err": ""}
+    mock_post.return_value.json.return_value = {"code": 200, "message": {"res": "success", "ret_code": ExecReturnCode.SUCCESS, "err": ""}}
     
     with patch.object(rabbitmq_client, "_send_result") as mock_send_result:
         rabbitmq_client._execute_callback(ch, method, properties, json.dumps(body))
@@ -95,13 +95,14 @@ def test_send_result(mock_pika, rabbitmq_client):
     mock_channel = Mock()
     rabbitmq_client.channel = mock_channel
     response = ExecResponse(res="success", ret_code=ExecReturnCode.SUCCESS, err="")
+    status_code = 200
     
-    rabbitmq_client._send_result(response, "request_id")
+    rabbitmq_client._send_result(response, status_code, "request_id")
     
     mock_channel.basic_publish.assert_called_once_with(
         exchange='results',
         routing_key="request_id",
-        body=response.json()
+        body= { "code": status_code, "message": response.json() }
     )
 
 #####################
@@ -140,12 +141,14 @@ def test_full_integration(rabbitmq_client, rabbitmq_connection):
         response_message = json.loads(body)
 
         ch.basic_ack(delivery_tag=method.delivery_tag)
-        result = pydantic.parse_obj_as(ExecResponse, response_message)
+
+        result = pydantic.parse_obj_as(ExecResponse, response_message["message"])
 
         assert response_message is not None
         assert result.err == None
         assert result.ret_code == ExecReturnCode.SUCCESS
         assert result.res == "gAVLBS4="
+        assert response_message["code"] == 200
 
         channel.stop_consuming()
     

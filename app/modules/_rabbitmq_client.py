@@ -90,19 +90,20 @@ class RabbitMQClient:
             # Send JSON to local REST API
             response = requests.post(uri, json=exec_response)
             response_data = response.json()
+            status_code = response.status_code
             
             # Parse execution response
             exec_response = pydantic.parse_obj_as(ExecResponse, response_data)
             
             # Send response to temporary queue
-            self._send_result(exec_response, request_id)
+            self._send_result(exec_response, status_code, request_id)
 
         except Exception as e:
             self.broker_logger.error(f"Error processing message: {e}")
         finally:
             ch.basic_ack(delivery_tag=method.delivery_tag)
     
-    def _send_result(self, response: ExecResponse, request_id: str):
+    def _send_result(self, response: ExecResponse, status_code: int, request_id: str):
         """
         Sends the execution result to a temporary queue.
 
@@ -116,7 +117,7 @@ class RabbitMQClient:
         self.channel.basic_publish(
             exchange='results',
             routing_key=request_id,
-            body=response.json()
+            body= { "code": status_code, "message": response.json() }
         )
 
         self.broker_logger.info("Response sent to temporary queue.")
