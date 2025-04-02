@@ -128,7 +128,7 @@ class RabbitMQClient:
         self.channel.basic_publish(
             exchange='results',
             routing_key=request_id,
-            body=body
+            body=json.dumps(body)
         )
 
         self.broker_logger.info("Response sent to temporary queue.")
