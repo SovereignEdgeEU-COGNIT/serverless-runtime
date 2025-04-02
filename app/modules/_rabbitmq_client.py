@@ -92,8 +92,8 @@ class RabbitMQClient:
             response_data = response.json()
             status_code = response.status_code
             
-            self.broker_logger.info("Response received: " + response_data)
-            self.broker_logger.info("Of type: " + type(response_data))
+            self.broker_logger.info("Response received: " + str(response_data))
+            self.broker_logger.info("Of type: " + str(type(response_data)))
             
             # Parse execution response
             exec_response = pydantic.parse_obj_as(ExecResponse, response_data)
@@ -115,6 +115,8 @@ class RabbitMQClient:
             request_id (str): The name of the temporary queue where the response should be sent.
             correlation_id (str): A unique identifier for correlating requests and responses.
         """
+
+        self.broker_logger.info(json.dumps({ "code": status_code, "message": response.json() }))
 
         # Publish the response to the temporary queue
         self.channel.basic_publish(
