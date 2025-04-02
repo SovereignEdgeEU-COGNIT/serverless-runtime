@@ -116,13 +116,19 @@ class RabbitMQClient:
             correlation_id (str): A unique identifier for correlating requests and responses.
         """
 
-        self.broker_logger.info(json.dumps({ "code": status_code, "message": response.json() }))
+        body = { 
+            "code": status_code, 
+            "message": response.json() 
+        }
+        
+        self.broker_logger.debug("Body: " + json.dumps(body))
+        self.broker_logger.debug("of type: " + str(type(body)))
 
         # Publish the response to the temporary queue
         self.channel.basic_publish(
             exchange='results',
             routing_key=request_id,
-            body= json.dumps({ "code": status_code, "message": response.json() })
+            body=body
         )
 
         self.broker_logger.info("Response sent to temporary queue.")
