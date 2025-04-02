@@ -92,6 +92,9 @@ class RabbitMQClient:
             response_data = response.json()
             status_code = response.status_code
             
+            self.broker_logger.info("Response received: " + response_data)
+            self.broker_logger.info("Of type: " + type(response_data))
+            
             # Parse execution response
             exec_response = pydantic.parse_obj_as(ExecResponse, response_data)
             
@@ -117,7 +120,7 @@ class RabbitMQClient:
         self.channel.basic_publish(
             exchange='results',
             routing_key=request_id,
-            body= { "code": status_code, "message": response.json() }
+            body= json.dumps({ "code": status_code, "message": response.json() })
         )
 
         self.broker_logger.info("Response sent to temporary queue.")
