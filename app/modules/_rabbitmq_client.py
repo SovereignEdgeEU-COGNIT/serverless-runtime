@@ -118,7 +118,7 @@ class RabbitMQClient:
 
         body = { 
             "code": status_code, 
-            "message": response.json() 
+            "message": json.loads(response.json())
         }
         
         self.broker_logger.debug("Body: " + json.dumps(body))
