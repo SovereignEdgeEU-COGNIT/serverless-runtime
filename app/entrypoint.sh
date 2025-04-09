@@ -18,4 +18,4 @@ fi
 
 # Start the API with Uvicorn
 cd app/
-uvicorn main:app --host "0.0.0.0" --port 8000 --broker "$COGNIT_BROKER" --flavour "$COGNIT_FLAVOUR" & echo $! > ../uvicorn.pid
+python3 main.py --host "0.0.0.0" --port 8000 --broker "$COGNIT_BROKER" --flavour "$COGNIT_FLAVOUR" & echo $! > ../uvicorn.pid
