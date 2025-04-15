@@ -17,7 +17,6 @@ source /var/run/one-context/one_env
 # Check required environment variables
 if [[ -z "$COGNIT_BROKER" || -z "$COGNIT_FLAVOUR" ]]; then
   echo "COGNIT_BROKER or COGNIT_FLAVOUR is not set."
-  exit 1
 fi
 
 # Start the API with Uvicorn and save the PID
