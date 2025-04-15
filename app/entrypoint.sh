@@ -8,8 +8,7 @@ source /var/run/one-context/one_env
 
 # Get the COGNIT_BROKER and COGNIT_FLAVOUR from env, or fail if not set
 if [[ -z "$COGNIT_BROKER" || -z "$COGNIT_FLAVOUR" ]]; then
-  echo "COGNIT_BROKER or COGNIT_FLAVOUR is not set. Aborting."
-  exit 1
+  echo "COGNIT_BROKER or COGNIT_FLAVOUR is not set."
 fi
 
 # Start the API with Uvicorn
