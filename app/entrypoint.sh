@@ -3,10 +3,6 @@
 # Kill existing Uvicorn process if running
 [ -f uvicorn.pid ] && kill $(cat uvicorn.pid) 2>/dev/null && echo "Previous process killed" || echo "No running process to kill"
 
-# Activate the virtual environment
-source serverless-env/bin/activate
-pip install -r requirements.txt
-
 # Source the one_env file to load variables
 source /var/run/one-context/one_env
 
