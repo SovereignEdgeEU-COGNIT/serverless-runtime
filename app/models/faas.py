@@ -26,6 +26,10 @@ class ExecSyncParams(BaseModel):
         description="Requirement ID taht belongs to current function",
     )
 
+class ExecutionMode(str, Enum):
+    SYNC = "sync"
+    ASYNC = "async"
+
 
 class ExecAsyncParams(BaseModel):
     lang: str = Field(
