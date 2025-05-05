@@ -9,6 +9,7 @@ from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
 
 import requests
 from modules._logger import CognitLogger
+from modules._rabbitmq_client import RabbitMQClient
 
 from uvicorn.config import LOGGING_CONFIG  # Import Uvicorn's logging config
 import traceback
@@ -131,6 +132,26 @@ initialize_prometheus()
 
 # Uvicorn startup (only when running this script directly)
 if __name__ == "__main__":
+    import threading
+    import argparse
     import uvicorn
-    cognit_logger.info("Starting Uvicorn server...")
-    uvicorn.run(app, host="0.0.0.0", port=SR_PORT)
+
+    # Create parser
+    parser = argparse.ArgumentParser(description="Arguments for main.py")
+
+    # Definir argumentos
+    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address")
+    parser.add_argument("--flavour", type=str, required=True, help="Service flavour")
+    parser.add_argument("--broker", type=str, required=True, help="RabbitMQ broker address")
+    parser.add_argument("--port", type=int, default=8000, help="Server port")
+
+    # Parse arguments
+    args = parser.parse_args()
+    
+    cognit_logger.info(f"Starting RabbitMQ client in queue: {args.flavour}...")
+    rabbitmq_client = RabbitMQClient(host=args.broker, queue=args.flavour)
+    client_process = threading.Thread(target=rabbitmq_client.run, daemon=True)
+    client_process.start()
+
+    cognit_logger.info(f"Starting Uvicorn server in {args.host}:{args.port}...")
+    uvicorn.run(app, host=args.host, port=args.port)
