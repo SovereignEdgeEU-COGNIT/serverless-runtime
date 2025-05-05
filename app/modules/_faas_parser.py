@@ -24,6 +24,12 @@ class FaasParser:
         blob_b64 = base64.b64encode(blob_cp)
         return blob_b64.decode("utf-8")
 
+    def deserialize_pb(self, input: str) -> Any:
+        # Decode it from base64
+        b64_bytes = base64.b64decode(input)
+        # Cloudpickle it
+        return b64_bytes
+
     def deserialize(self, input: str) -> Any:
         # Decode it from base64
         b64_bytes = base64.b64decode(input)
@@ -36,6 +42,6 @@ class FaasParser:
         return decoded_str
 
     def any_to_b64(self, input: Any) -> str:
-        # Encode it from base64
-        encoded_str = base64.b64encode(str(input).encode("utf-8"))
+        # Encode it to base64
+        encoded_str = base64.b64encode(input).decode("utf-8")
         return encoded_str
