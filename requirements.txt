@@ -29,3 +29,5 @@ tomli==2.0.1
 typing_extensions==4.6.2
 uvicorn==0.22.0
 dask[distributed]==2023.6.1
+boto3 # MinIO
+botocore # MinIO
