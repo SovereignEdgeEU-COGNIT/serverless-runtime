@@ -103,30 +103,41 @@ def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
         cognit_logger.error(f"Error updating metrics: {e}")
 
 def pb_serialize_result(result):
-    # Construct a FaasResponse object and respond
-    response_param = nano_pb2.MyParam()
     
+    if not isinstance(result, (list, tuple)):
+        result = [result]
+    
+    faas_response = nano_pb2.FaasResponse()
+    
+    for item in result:
+        cognit_logger.debug(item)
+        # Force list
+        values = item if isinstance(item, list) else [item]
 
-    # Determine the type of result and assign it appropriately
-    if isinstance(result, float):
-        response_param.my_float.values.extend([result])
-    elif isinstance(result, int):
-        response_param.my_int32.values.extend([result])  # Assuming 32-bit int, change to my_int64 for larger values
-    elif isinstance(result, bool):
-        response_param.my_bool.values.extend([result])
-    elif isinstance(result, list):
-        if all(isinstance(x, float) for x in result):
-            response_param.my_double.values.extend(result)
-        elif all(isinstance(x, int) for x in result):
-            response_param.my_int32.values.extend(result)  # Adjust type as needed
+        # Determine type
+        types = {type(v) for v in values}
+        param = faas_response.my_faas_response.add()
+
+        if types <= {bool}:
+            param.my_bool.values.extend(values)
+        elif types <= {float}:
+            param.my_double.values.extend(values)
+        elif types <= {int}:
+            param.my_int64.values.extend(values)
+        elif types <= {str}:
+            if len(values) != 1:
+                raise ValueError(f"No se puede serializar lista de strings de longitud {len(values)}")
+            param.my_string = values[0]
+        elif types <= {bytes}:
+            if len(values) != 1:
+                raise ValueError("Type not supported")
+            param.my_bytes = values[0]
         else:
-            return "Unsupported list type", 400
-    elif isinstance(result, str):
-        response_param.my_string = result
-    else:
-        return "Unsupported return type", 400
-    
-    return response_param.SerializeToString()
+            raise TypeError("Type not supported")
+
+    serialized_params = faas_response.SerializeToString()     
+
+    return serialized_params
 
 def deserialize_protobuf_params(params):
     
@@ -172,6 +183,7 @@ def deserialize_protobuf_params(params):
 
         # Añadimos valores al vector args
         args.append(values if len(values) > 1 else values[0])
+        
     return args
 
 def make_fc_executable(fc_str):

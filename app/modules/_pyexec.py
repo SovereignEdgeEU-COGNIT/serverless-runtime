@@ -66,6 +66,7 @@ class PyExec(Executor):
             self.end_pyexec_time = time.time()
             self.ret_code = ExecReturnCode.ERROR
             self.err = "Error executing function: " + str(e)
+            raise Exception(self.err)
 
     def get_result(self):
         return self.res
