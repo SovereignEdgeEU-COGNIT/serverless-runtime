@@ -31,7 +31,7 @@ class RabbitMQClient:
             int: 0 if the connection is successful, -1 if there is an error.
         """
         try:
-            self.connection = pika.BlockingConnection(pika.ConnectionParameters(host=self.host))
+            self.connection = pika.BlockingConnection(pika.URLParameters(self.host))
             self.channel = self.connection.channel()
             self.broker_logger.info("Connected to RabbitMQ broker.")
             return 0
