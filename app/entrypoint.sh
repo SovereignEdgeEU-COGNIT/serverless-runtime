@@ -26,4 +26,5 @@ fi
 
 # Start the API with Uvicorn and save the PID
 python3 main.py --host "0.0.0.0" --port 8000 --broker "$COGNIT_BROKER" --flavour "$COGNIT_FLAVOUR" &
+
 echo $! > "$PID_FILE"
