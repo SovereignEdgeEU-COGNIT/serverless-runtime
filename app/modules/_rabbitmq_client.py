@@ -1,6 +1,7 @@
 from models.faas import ExecResponse, ExecutionMode
 from modules._logger import CognitLogger
 
+import threading
 import pydantic
 import requests
 import pika
@@ -8,7 +9,6 @@ import json
 
 class RabbitMQClient:
 
-    # TODO: How the SR knows about its flavour
     def __init__(self, host: str, queue: str):
         """
         Initializes the RabbitMQ broker connection parameters.
@@ -17,6 +17,7 @@ class RabbitMQClient:
             host (str): The hostname or IP address of the RabbitMQ broker. Defaults to 'localhost'.
             queue (str): The name of the queue to connect to. Defaults to 'flavour_queue'.
         """
+
         self.host = host
         self.queue = queue
         self.channel = None
@@ -31,11 +32,15 @@ class RabbitMQClient:
             int: 0 if the connection is successful, -1 if there is an error.
         """
         try:
-            self.connection = pika.BlockingConnection(pika.URLParameters(self.host))
+
+            params = pika.URLParameters(self.host)
+            self.connection = pika.BlockingConnection(params)
             self.channel = self.connection.channel()
             self.broker_logger.info("Connected to RabbitMQ broker.")
             return 0
+        
         except Exception as e:
+
             self.broker_logger.error(f"Connection error: {e}")
             return -1
         
@@ -46,7 +51,9 @@ class RabbitMQClient:
         If the connection fails, logs an error and exits the program.
 
         """
+
         if self._connect_to_broker() == -1:
+
             self.broker_logger.error("Unable to connect to RabbitMQ broker. Exiting...")
             exit(-1)
 
@@ -59,8 +66,11 @@ class RabbitMQClient:
 
         # Listen indefinitely
         try: 
+
             self.channel.start_consuming()
+
         except Exception as e:
+
             self.broker_logger.error(f"Error in message consumption: {e}")
             exit(-1)
     
@@ -74,7 +84,23 @@ class RabbitMQClient:
             properties: Message properties including reply_to and correlation_id.
             body: The message body, expected to be a JSON-formatted string.
         """
+
+        thread = threading.Thread(target=self._process_message, args=(ch, method, body))
+        thread.daemon = True
+        thread.start()
+
+    def _process_message(self, ch, method, body):
+        """
+        Processes incoming messages from the RabbitMQ queue.
+
+        Args:
+            ch: The RabbitMQ channel object.
+            method: Provides delivery information such as the delivery tag.
+            body: The message body, expected to be a JSON-formatted string.
+        """
+
         try:
+
             # Receive JSON message
             request_data = json.loads(body)
             exec_mode = request_data["mode"]
@@ -83,8 +109,11 @@ class RabbitMQClient:
 
             # Determine execution mode
             if exec_mode == ExecutionMode.SYNC:
+
                 uri = "http://localhost:8000/v1/faas/execute-sync"
+
             elif exec_mode == ExecutionMode.ASYNC:
+
                 uri = "http://localhost:8000/v1/faas/execute-sync"  # TODO: Async executions should be handled differently
 
             # Send JSON to local REST API
@@ -102,8 +131,11 @@ class RabbitMQClient:
             self._send_result(exec_response, status_code, request_id)
 
         except Exception as e:
+
             self.broker_logger.error(f"Error processing message: {e}")
+
         finally:
+
             ch.basic_ack(delivery_tag=method.delivery_tag)
     
     def _send_result(self, response: ExecResponse, status_code: int, request_id: str):
