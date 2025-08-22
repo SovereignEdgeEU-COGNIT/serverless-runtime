@@ -86,6 +86,7 @@ class RabbitMQClient:
         """
 
         thread = threading.Thread(target=self._process_message, args=(ch, method, body))
+        thread.daemon = True
         thread.start()
 
     def _process_message(self, ch, method, body):
