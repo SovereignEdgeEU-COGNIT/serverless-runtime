@@ -23,8 +23,13 @@ def rabbitmq_client():
 
 from unittest.mock import Mock
 
+@patch("pika.URLParameters")
 @patch("pika.BlockingConnection")
-def test_connect_to_broker(mock_pika, rabbitmq_client):
+def test_connect_to_broker(mock_url_params, mock_pika, rabbitmq_client):
+
+    # Mock the URL parameters
+    mock_url_params.return_value = Mock()
+
     # Mock the connection and the channel
     mock_connection = Mock()
     mock_pika.return_value = mock_connection
@@ -45,8 +50,13 @@ def test_connect_to_broker(mock_pika, rabbitmq_client):
 
 from unittest.mock import Mock
 
+@patch("pika.URLParameters")
 @patch("pika.BlockingConnection")
-def test_connect_to_broker_failure(mock_pika, rabbitmq_client):
+def test_connect_to_broker_failure(mock_url_params, mock_pika, rabbitmq_client):
+
+    # Mock the URL parameters
+    mock_url_params.return_value = Mock()
+
     # Simulate a connection failure
     mock_pika.side_effect = Exception("failure")
     
@@ -98,11 +108,13 @@ def test_send_result(mock_pika, rabbitmq_client):
     status_code = 200
     
     rabbitmq_client._send_result(response, status_code, "request_id")
+
+    body = { "code": status_code, "message": json.loads(response.json()) }
     
     mock_channel.basic_publish.assert_called_once_with(
         exchange='results',
         routing_key="request_id",
-        body= { "code": status_code, "message": response.json() }
+        body=json.dumps(body)
     )
 
 #####################
