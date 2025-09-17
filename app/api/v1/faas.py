@@ -102,7 +102,7 @@ def update_histogram_metrics(executor, vmid=None, asyncExecutionSuccess=None):
             execution_time_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(exec_time))
             
             # Update VM template with metrics using onegate
-            update_vm_template_with_metrics(vmid, exec_time, outcome)
+            update_vm_template_with_metrics(vmid)
         else:
             cognit_logger.warning(f"Warning: exec_time is missing or invalid: {exec_time}")
 
@@ -112,7 +112,7 @@ def update_histogram_metrics(executor, vmid=None, asyncExecutionSuccess=None):
 # Get VM ID once at module level (it won't change)
 VM_ID = get_vmid()
 
-def update_vm_template_with_metrics(vmid, exec_time, outcome):
+def update_vm_template_with_metrics(vmid):
     """Update VM template with execution metrics using onegate command."""
     try:
         import subprocess
