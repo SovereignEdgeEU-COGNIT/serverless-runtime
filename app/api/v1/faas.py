@@ -74,9 +74,13 @@ input_size_histogram = Histogram(
     labelnames=['vmid', 'function_outcome']
 )
 
-def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
+def update_histogram_metrics(executor, vmid=None, asyncExecutionSuccess=None):
     """Updates Prometheus metrics immediately after execution."""
     try:
+        # Use cached VM_ID if vmid not provided
+        if vmid is None:
+            vmid = VM_ID
+            
         if asyncExecutionSuccess not in [True,False]:
             outcome = "success" if executor.get_ret_code() == ExecReturnCode.SUCCESS else "error"
         else:
@@ -96,11 +100,98 @@ def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
         if isinstance(exec_time, (int, float)) and exec_time > 0:
             cognit_logger.warning(f"Recording execution time: {exec_time}")
             execution_time_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(exec_time))
+            
+            # Update VM template with metrics using onegate
+            update_vm_template_with_metrics(vmid, exec_time, outcome)
         else:
             cognit_logger.warning(f"Warning: exec_time is missing or invalid: {exec_time}")
 
     except Exception as e:
         cognit_logger.error(f"Error updating metrics: {e}")
+
+# Get VM ID once at module level (it won't change)
+VM_ID = get_vmid()
+
+def update_vm_template_with_metrics(vmid, exec_time, outcome):
+    """Update VM template with execution metrics using onegate command."""
+    try:
+        import subprocess
+        import json
+        
+        # Get current metrics from Prometheus
+        metrics_data = get_prometheus_metrics(vmid)
+        
+        if metrics_data:
+            # Update VM template with metrics
+            for metric_name, value in metrics_data.items():
+                cmd = f"onegate vm update {vmid} --data \"{metric_name}={value}\""
+                cognit_logger.info(f"Updating VM template: {cmd}")
+                
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                if result.returncode == 0:
+                    cognit_logger.info(f"Successfully updated {metric_name}={value}")
+                else:
+                    cognit_logger.error(f"Failed to update {metric_name}: {result.stderr}")
+        
+    except Exception as e:
+        cognit_logger.error(f"Error updating VM template: {e}")
+
+def get_prometheus_metrics(vmid):
+    """Get current histogram metrics from Prometheus for the given VM ID."""
+    try:
+        import requests
+        import re
+        
+        # Query Prometheus metrics
+        response = requests.get("http://localhost:9100/metrics", timeout=5)
+        if response.status_code != 200:
+            return None
+            
+        metrics_text = response.text
+        metrics_data = {}
+        
+        # Extract only success metrics for the specific VM ID
+        success_count = 0
+        success_sum = 0
+        
+        # Get count and sum for success executions
+        count_pattern = rf'sr_histogram_func_exec_time_seconds_count\{{vmid="{re.escape(str(vmid))}",function_outcome="success"\}} (\d+(?:\.\d+)?)'
+        sum_pattern = rf'sr_histogram_func_exec_time_seconds_sum\{{vmid="{re.escape(str(vmid))}",function_outcome="success"\}} (\d+(?:\.\d+)?)'
+        
+        count_match = re.search(count_pattern, metrics_text)
+        sum_match = re.search(sum_pattern, metrics_text)
+        
+        if count_match:
+            success_count = float(count_match.group(1))
+        if sum_match:
+            success_sum = float(sum_match.group(1))
+        
+        # Calculate average execution time for success
+        if success_count > 0:
+            metrics_data["SR_EXEC_TIME_SUCCESS_AVG"] = round(success_sum / success_count, 3)
+        
+        # Extract bucket metrics for success executions
+        bucket_pattern = rf'sr_histogram_func_exec_time_seconds_bucket\{{vmid="{re.escape(str(vmid))}",function_outcome="success",le="([^"]+)"\}} (\d+(?:\.\d+)?)'
+        
+        for bucket_match in re.finditer(bucket_pattern, metrics_text):
+            bucket_le = bucket_match.group(1)
+            bucket_value = int(float(bucket_match.group(2)))
+            
+            if bucket_le == "1.0":
+                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_1S"] = bucket_value
+            elif bucket_le == "5.0":
+                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_5S"] = bucket_value
+            elif bucket_le == "10.0":
+                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_10S"] = bucket_value
+            elif bucket_le == "+Inf":
+                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_INF"] = bucket_value
+        
+        cognit_logger.info(f"Extracted metrics for VM {vmid}: {metrics_data}")
+        return metrics_data
+        
+    except Exception as e:
+        cognit_logger.error(f"Error getting Prometheus metrics: {e}")
+        return None
 
 def pb_serialize_result(result):
     
@@ -361,7 +452,7 @@ async def execute_sync(offloaded_func: ExecSyncParams):
             executor.run()
             sync_start_time = executor.start_pyexec_time
             sync_end_time = executor.end_pyexec_time
-            update_histogram_metrics(executor, get_vmid())
+            update_histogram_metrics(executor)
         except Exception as e:
             cognit_logger.error(f"Unhandled exception during execution: {e}")
             raise HTTPException(status_code=500, detail=f"Execution failed: {e}")
@@ -424,6 +515,9 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
             params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
             params_prom_label.insert(0,params.__sizeof__())
 
+
+        # TODO: inject metrics into vm template also in async mode
+
         return AsyncExecResponse(
             status=AsyncExecStatus.WORKING,
             res=None,
@@ -476,7 +570,7 @@ async def get_faas_uuid_status(faas_task_uuid: str):
                 exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
             )
         if status != AsyncExecStatus.WORKING:
-            update_histogram_metrics(executor, get_vmid(), status==TaskState.OK)
+            update_histogram_metrics(executor, asyncExecutionSuccess=status==TaskState.OK)
 
         return response.dict()
 
