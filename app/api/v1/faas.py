@@ -155,8 +155,8 @@ def get_prometheus_metrics(vmid):
         success_sum = 0
         
         # Get count and sum for success executions
-        count_pattern = rf'sr_histogram_func_exec_time_seconds_count\{{vmid="{re.escape(str(vmid))}",function_outcome="success"\}} (\d+(?:\.\d+)?)'
-        sum_pattern = rf'sr_histogram_func_exec_time_seconds_sum\{{vmid="{re.escape(str(vmid))}",function_outcome="success"\}} (\d+(?:\.\d+)?)'
+        count_pattern = rf'sr_histogram_func_exec_time_seconds_count\{{function_outcome="success",vmid="{re.escape(str(vmid))}"\}} (\d+(?:\.\d+)?)'
+        sum_pattern = rf'sr_histogram_func_exec_time_seconds_sum\{{function_outcome="success",vmid="{re.escape(str(vmid))}"\}} (\d+(?:\.\d+)?)'
         
         count_match = re.search(count_pattern, metrics_text)
         sum_match = re.search(sum_pattern, metrics_text)
@@ -171,7 +171,7 @@ def get_prometheus_metrics(vmid):
             metrics_data["SR_EXEC_TIME_SUCCESS_AVG"] = round(success_sum / success_count, 3)
         
         # Extract bucket metrics for success executions
-        bucket_pattern = rf'sr_histogram_func_exec_time_seconds_bucket\{{vmid="{re.escape(str(vmid))}",function_outcome="success",le="([^"]+)"\}} (\d+(?:\.\d+)?)'
+        bucket_pattern = rf'sr_histogram_func_exec_time_seconds_bucket\{{function_outcome="success",le="([^"]+)",vmid="{re.escape(str(vmid))}"\}} (\d+(?:\.\d+)?)'
         
         for bucket_match in re.finditer(bucket_pattern, metrics_text):
             bucket_le = bucket_match.group(1)
