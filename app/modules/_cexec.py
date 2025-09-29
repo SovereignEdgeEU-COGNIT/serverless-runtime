@@ -1,32 +1,33 @@
+from modules._logger import CognitLogger
+from modules._executor import *
+from models.faas import *
+
+from typing import Any, Optional
+import subprocess
 import base64
+import time
 import json
 import os
-import subprocess
-from enum import Enum
-from typing import Any, Callable, Optional
-import time
-
-from fastapi import HTTPException
-from models.faas import Param
-from modules._executor import *
-from modules._logger import CognitLogger
 
 cognit_logger = CognitLogger()
 
-
 class FuncStruct:
+
     def __init__(self, func_name, params=None):
+
         self.func_name = func_name
         self.params = params or []
 
-
 class CExec(Executor):
+
     def __init__(self, fc: str, params: list[str]):
+
         self.lang = "C"
         self.fc = fc
         self.params_b64 = params
         self.params: list[Param]
         self.process_manager: Any
+
         # Function extraction attributes
         self.includes: list = []
         self.defines: list = []
@@ -37,6 +38,7 @@ class CExec(Executor):
         self.param_definition_list: list = []
         self.print_output_params: list = []
         self.func_calling: str = ""
+
         # Result
         self.res: Optional[any]
         # Execution times
@@ -185,6 +187,7 @@ class CExec(Executor):
             clingPath = os.path.expanduser(
                 "/root/cling_test/cling_2020-11-05_ROOT-ubuntu18.04/bin/cling"
             )
+
             self.extract_includes()
             self.extract_defines()
             self.extract_typedefs()
@@ -239,8 +242,10 @@ class CExec(Executor):
             output, error = self.process.communicate(input=cling_code)
 
             listResult = output.split()
+
             # Parse the output as the output type
             for i, param in enumerate(self.params):
+
                 if param.mode == "OUT":
                     if param.type == "float":
                         float_value_in_str = listResult[-1].rstrip("f")  # Deletes 'f' sufix
@@ -258,14 +263,17 @@ class CExec(Executor):
             cognit_logger.info(f"Result: {self.res}")
             self.end_pyexec_time = time.time()
             return self
+        
         except Exception as e:
+
             cognit_logger.error(f"Error while running C function: {e}")
             self.res = None
             self.end_pyexec_time = time.time()
-            raise HTTPException(status_code=400, detail="Error executing function")
-        return
+            self.err = "Error executing C function: " + str(e)
+            self.ret_code = ExecReturnCode.ERROR
 
     def get_result(self):
+
         cognit_logger.debug("Get C result func")
         cognit_logger.info(f"Result: {self.res}")
         return self.res
