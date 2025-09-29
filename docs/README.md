@@ -4,7 +4,7 @@ This folders contains useful turnkey examples that may show to the first time us
 
 ## Function and parameter serialization
 
-The example function that represents the offloading function is a simple addition: `c = a + b`: 
+The example function that represents the offloading function is a simple addition: `c = a + b`:
 
 ```python
 def dummy_func(a, b):
@@ -27,9 +27,10 @@ cloudpickle.loads(base64.b64decode(<serialized_value>))
 
 ## REST API requests
 
-Once the required data is serialized, it can be sent to the Serverless Runtime in order to be executed. The examples of both synchronous and asynchronous execution calls are given next, being `a = 2` and `b = 3`. 
+Once the required data is serialized, it can be sent to the Serverless Runtime in order to be executed. The examples of both synchronous and asynchronous execution calls are given next, being `a = 2` and `b = 3`.
 
-* **Synchronous function execution:** 
+* **Synchronous function execution:**
+
   `POST http://127.0.0.1:8000/v1/faas/execute-sync`
 
     In the POST request we need to specify the language of the offloaded function, and the serialized function and parameters, which need to be include in the request body as a json:
@@ -45,6 +46,7 @@ Once the required data is serialized, it can be sent to the Serverless Runtime i
         ]
     }
     ```
+
     The expected response for a successful execution will be as follows:
 
     ```json
@@ -55,51 +57,6 @@ Once the required data is serialized, it can be sent to the Serverless Runtime i
     }
     ```
 
-* **Asynchronous function execution:** 
-  `POST http://127.0.0.1:8000/v1/faas/execute-async`
-
-    The body for an asynchronous execution request is the same as the synchronous one. However, the response will be different since in this case we will receive the status of the function that is running in the background. A working function will offer the following response:
-
-    ```json
-    {
-        "status": "WORKING",
-        "res": null,
-        "exec_id": {
-            "faas_task_uuid": "cd3fe080-5114-11ee-afe0-0312eb1606ff"
-        }
-    }
-    ```
-
-* **Asynchronous function status:** Once the function is running, we can use the obtained id (faas_task_uuid) to check its status:  
-  `GET http://127.0.0.1:8000/v1/faas/cd3fe080-5114-11ee-afe0-0312eb1606ff/status`
-
-  The response for an executing function would be:
-
-    ```json
-    {
-        "status": "WORKING",
-        "res": null,
-        "exec_id": {
-            "faas_task_uuid": "cd3fe080-5114-11ee-afe0-0312eb1606ff"
-        }
-    }
-    ```
-    while the response once the execution is finished would be the following, where we would obtain the function result:
-
-    ```json
-    {
-        "status": "READY",
-        "res": {
-            "ret_code": 0,
-            "res": "gAVLBS4=",
-            "err": null
-        },
-        "exec_id": {
-            "faas_task_uuid": "cd3fe080-5114-11ee-afe0-0312eb1606ff"
-        }
-    }
-    ```
-    
 ## Postman collection
 
 A postman collection with the requests is included [here](endpoint_request_examples.json)
