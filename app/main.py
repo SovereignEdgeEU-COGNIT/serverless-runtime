@@ -1,22 +1,22 @@
-from api.v1.daas import daas_router
 from api.v1.faas import faas_router, CognitFuncExecCollector, execution_time_histogram, input_size_histogram
-from fastapi import FastAPI, Response, Request
-import prometheus_client
-from prometheus_client.core import GaugeMetricFamily, REGISTRY
-from prometheus_client import start_http_server, multiprocess, CollectorRegistry
-import os, socket
 from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
-
-import requests
-from modules._logger import CognitLogger
+from prometheus_client import start_http_server, CollectorRegistry
 from modules._rabbitmq_client import RabbitMQClient
+from modules._logger import CognitLogger
 
-from uvicorn.config import LOGGING_CONFIG  # Import Uvicorn's logging config
-import traceback
 from starlette.responses import JSONResponse
+from uvicorn.config import LOGGING_CONFIG  # Import Uvicorn's logging config
+from fastapi import FastAPI, Request
+import traceback
+import threading
+import argparse
+import requests
+import uvicorn
+import socket
 
 # Initialize logger
 cognit_logger = CognitLogger()
+
 # Configure Uvicorn to log errors using your logger
 LOGGING_CONFIG["loggers"]["uvicorn.error"]["handlers"] = ["default"]
 LOGGING_CONFIG["loggers"]["uvicorn.access"]["handlers"] = ["default"]
@@ -29,23 +29,21 @@ app = FastAPI(title="Serverless Runtime")
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    """Handles all uncaught exceptions globally and logs them."""
+    """
+    Handle all uncaught exceptions and log them.
+    """
+
     cognit_logger.critical(f"Unhandled exception: {exc}\n{traceback.format_exc()}")
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal Server Error"},
-    )
-    
+
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
 @app.get("/")
+
 async def root():
     return "Main routes: \
-            POST -> /v1/faas/execute-sync  \
-                    /v1/faas/execute-async \
-                    /v1/daas/upload \
-            GET -> /v1/faas/{faas_uuid}/status"
+            POST -> /v1/faas/execute-sync "
 
 app.include_router(faas_router, prefix="/v1/faas")
-app.include_router(daas_router, prefix="/v1/daas")
 
 def is_prometheus_running() -> bool:
     """
@@ -55,25 +53,32 @@ def is_prometheus_running() -> bool:
     Returns:
         bool: True if Prometheus is running, False otherwise.
     """
-    # Step 1: Perform a curl to localhost:{PROM_PORT}
+
     try:
+        # Check if Prometheus is running by performing a curl to localhost:{PROM_PORT}
         response = requests.get(f"http://localhost:{PROM_PORT}", timeout=5)
+
         if response.status_code == 200:
+
             cognit_logger.info(f"Prometheus is running on localhost:{PROM_PORT}")
             return True
+        
     except requests.exceptions.RequestException as e:
-        # Step 2: If curl fails, log a warning
         cognit_logger.warning(f"Prometheus curl failed to localhost:{PROM_PORT}: {e}")
 
-    # Step 2a: Check if the port is open on the host
     try:
+        # Check if the port is open on the host
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+
             s.settimeout(30)
+
             result = s.connect_ex(("localhost", PROM_PORT))
+
             if result == 0:
                 cognit_logger.warning(f"Port {PROM_PORT} is open on the host, but Prometheus is not responding.")
             else:
                 cognit_logger.warning(f"Port {PROM_PORT} is not open on the host.")
+
     except Exception as e:
         cognit_logger.warning(f"Failed to check if port {PROM_PORT} is open: {e}")
 
@@ -84,29 +89,37 @@ def get_local_ip() -> str:
     Get the local IP address (IPv4 or IPv6) for 'localhost'.
     Prefers IPv4 if available.
     """
+
     try:
         # Get all address info for 'localhost'
         addr_info = socket.getaddrinfo(host='localhost', port='80')
+
         for info in addr_info:
             # Extract the IP address from the address info
             ip = info[4][0]
             # Prefer IPv4 if available
             if ipadd(ip).version == 4:
                 return ip
+            
         # If no IPv4 address is found, return the first IPv6 address
         return addr_info[0][4][0]
+    
     except Exception as e:
         cognit_logger.warning(f"Failed to get local IP address: {e}")
         return "127.0.0.1"  # Default to IPv4
 
 # Initialize Prometheus and check if it's running
 def initialize_prometheus():
+
     global r
+
     cognit_logger.debug("Initializing Prometheus...")
+
     # Create Prometheus registry
     r = CollectorRegistry()
     r.register(execution_time_histogram)
     r.register(input_size_histogram)
+    
     # Register COGNIT collector within the registry
     r.register(CognitFuncExecCollector())
 
@@ -132,9 +145,6 @@ initialize_prometheus()
 
 # Uvicorn startup (only when running this script directly)
 if __name__ == "__main__":
-    import threading
-    import argparse
-    import uvicorn
 
     # Create parser
     parser = argparse.ArgumentParser(description="Arguments for main.py")
