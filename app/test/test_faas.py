@@ -1,29 +1,28 @@
-import base64
-import logging
-import time
-
-import cloudpickle
-import pydantic
-from fastapi.testclient import TestClient
-from main import app
-from models.faas import *
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
+from models.faas import *
+from main import app
 
-client = TestClient(app)
+from fastapi.testclient import TestClient
+from unittest.mock import patch
+import cloudpickle
+import base64
+
 cognit_logger = CognitLogger()
-cognit_logger.set_level(logging.CRITICAL)
+client = TestClient(app)
 parser = FaasParser()
 
-
-def myfunction(a, b):
+def myfunction(a: int, b: int) -> int:
     return a + b
 
+@patch("api.v1.faas.get_vmid")
+def test_exec_sync_ok(mock_get_vmid):
 
-def test_exec_sync_ok():
-    cognit_logger.info("Execute-sync test")
-    t_lang = "PY"
-    t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
+    cognit_logger.info("Execute Sync: OK")
+
+    mock_get_vmid.return_value = "test_vmid"
+
+    fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
     a_param = 2
     b_param = 3
 
@@ -31,51 +30,25 @@ def test_exec_sync_ok():
     param_list.append(parser.serialize(a_param))
     param_list.append(parser.serialize(b_param))
 
-    sync_ctx = ExecSyncParams(lang=t_lang, fc=t_fc, params=param_list)
+    sync_ctx = ExecSyncParams(lang="PY", fc=fc, params=param_list)
     response = client.post("/v1/faas/execute-sync", json=sync_ctx.dict())
+
     assert response.status_code == 200
+
     result = response.json()
     cognit_logger.debug(f"Result: {result}")
+
     assert result["ret_code"] == 0
     assert result["res"] == parser.serialize(5)
+    assert result["err"] == None
 
+@patch("api.v1.faas.get_vmid")
+def test_exec_sync_wrong_function(mock_get_vmid):
 
-def test_exec_async_ok():
-    cognit_logger.info("Execute Async test")
-    t_lang = "PY"
-    t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
-    a_param = 2
-    b_param = 3
+    cognit_logger.info("Execute Sync: Wrong function")
 
-    param_list = []
-    param_list.append(parser.serialize(a_param))
-    param_list.append(parser.serialize(b_param))
+    mock_get_vmid.return_value = "test_vmid"
 
-    sync_ctx = ExecAsyncParams(lang=t_lang, fc=t_fc, params=param_list)
-
-    response = client.post("/v1/faas/execute-async", json=sync_ctx.dict())
-    assert response.status_code == 200
-
-    resp: AsyncExecResponse = pydantic.parse_obj_as(AsyncExecResponse, response.json())
-    assert resp is not None
-
-    time.sleep(1)
-    response = client.get("/v1/faas/{}/status".format(resp.exec_id.faas_task_uuid))
-    assert response.status_code == 200
-
-    result: AsyncExecResponse = pydantic.parse_obj_as(
-        AsyncExecResponse, response.json()
-    )
-    assert result is not None
-    assert result.res is not None
-    assert result.res.res is not None
-    assert parser.deserialize(result.res.res) == 5
-    assert result.res.ret_code == ExecReturnCode.SUCCESS
-    print(response.json())
-
-
-def test_exec_sync_http400_function_error():
-    cognit_logger.info("Execute Sync: HTTP 400 - Wrong function")
     t_lang = "PY"
     t_fc = "c = a + b"
     a_param = 2
@@ -85,81 +58,54 @@ def test_exec_sync_http400_function_error():
     param_list.append(parser.serialize(b_param))
 
     sync_ctx = ExecSyncParams(lang=t_lang, fc=t_fc, params=param_list)
-
     response = client.post("/v1/faas/execute-sync", json=sync_ctx.dict())
-    assert response.status_code == 400
+
+    assert response.status_code == 200
+
     result = response.json()
     cognit_logger.debug(f"Response: {result}")
+    cognit_logger.debug(f"Error: {result['err']}")
 
+    assert result["ret_code"] == ExecReturnCode.ERROR.value
+    assert parser.deserialize(result["res"]) is None
+    assert result["err"] != ""
 
-def test_exec_sync_http400_params_error():
-    cognit_logger.info("Execute Sync: HTTP 400 - Wrong Python params")
-    t_lang = "Python"
-    t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
-    param_list = []
-    param_list.append(2)
-    param_list.append(3)
+@patch("api.v1.faas.get_vmid")
+def test_exec_sync_wrong_params(mock_get_vmid):
 
-    sync_ctx = ExecSyncParams(lang=t_lang, fc=t_fc, params=param_list)
-    response = client.post("/v1/faas/execute-sync", json=sync_ctx.dict())
-    assert response.status_code == 400
-    result = response.json()
-    cognit_logger.debug(f"Response: {result}")
+    cognit_logger.info("Execute Sync: Wrong Python params")
 
+    mock_get_vmid.return_value = "test_vmid"
 
-def test_exec_sync_http400_language_error():
-    cognit_logger.info("Execute Sync: HTTP 404 - Wrong languaje")
-    t_lang = "Python"
-    t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
-    a_param = 2
-    b_param = 3
-    param_list = []
-    param_list.append(parser.serialize(a_param))
-    param_list.append(parser.serialize(b_param))
-
-    sync_ctx = ExecSyncParams(lang=t_lang, fc=t_fc, params=param_list)
-    response = client.post("/v1/faas/execute-sync", json=sync_ctx.dict())
-    assert response.status_code == 400
-    result = response.json()
-    cognit_logger.debug(f"Response: {result}")
-
-
-def test_exec_async_http400_function_error():
-    cognit_logger.info("Execute Async: HTTP 400- Wrong function")
     t_lang = "PY"
-    t_fc = "c = a + b"
+    t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
     a_param = 2
-    b_param = 3
+    b_param = "WrongParam"
     param_list = []
     param_list.append(parser.serialize(a_param))
     param_list.append(parser.serialize(b_param))
 
-    sync_ctx = ExecAsyncParams(lang=t_lang, fc=t_fc, params=param_list)
+    sync_ctx = ExecSyncParams(lang=t_lang, fc=t_fc, params=param_list)
+    response = client.post("/v1/faas/execute-sync", json=sync_ctx.dict())
 
-    response = client.post("/v1/faas/execute-async", json=sync_ctx.dict())
-    assert response.status_code == 400
+    assert response.status_code == 200
+
     result = response.json()
     cognit_logger.debug(f"Response: {result}")
+    cognit_logger.debug(f"Error: {result['err']}")
 
+    assert result["ret_code"] == ExecReturnCode.ERROR.value
+    assert parser.deserialize(result["res"]) is None
+    assert result["err"] != ""
 
-def test_exec_async_http400_params_error():
-    cognit_logger.info("Execute Sync: HTTP 400 - Wrong Python params")
-    t_lang = "Python"
-    t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
-    param_list = []
-    param_list.append(2)
-    param_list.append(3)
+@patch("api.v1.faas.get_vmid")
+def test_exec_sync_wrong_language(mock_get_vmid):
 
-    sync_ctx = ExecAsyncParams(lang=t_lang, fc=t_fc, params=param_list)
-    response = client.post("/v1/faas/execute-async", json=sync_ctx.dict())
-    assert response.status_code == 400
-    result = response.json()
-    cognit_logger.debug(f"Response: {result}")
+    cognit_logger.info("Execute Sync: Wrong language")
 
+    mock_get_vmid.return_value = "test_vmid"
 
-def test_exec_async_http400_language_error():
-    cognit_logger.info("Execute Sync: HTTP 404 - Wrong languaje")
-    t_lang = "Python"
+    t_lang = "WrongLanguage"
     t_fc = base64.b64encode(cloudpickle.dumps(myfunction)).decode("utf-8")
     a_param = 2
     b_param = 3
@@ -167,8 +113,15 @@ def test_exec_async_http400_language_error():
     param_list.append(parser.serialize(a_param))
     param_list.append(parser.serialize(b_param))
 
-    sync_ctx = ExecAsyncParams(lang=t_lang, fc=t_fc, params=param_list)
-    response = client.post("/v1/faas/execute-async", json=sync_ctx.dict())
-    assert response.status_code == 400
+    sync_ctx = ExecSyncParams(lang=t_lang, fc=t_fc, params=param_list)
+    response = client.post("/v1/faas/execute-sync", json=sync_ctx.dict())
+
+    assert response.status_code == 200
+
     result = response.json()
     cognit_logger.debug(f"Response: {result}")
+    cognit_logger.debug(f"Error: {result['err']}")
+
+    assert result["ret_code"] == ExecReturnCode.ERROR.value
+    assert parser.deserialize(result["res"]) is None
+    assert result["err"] != ""

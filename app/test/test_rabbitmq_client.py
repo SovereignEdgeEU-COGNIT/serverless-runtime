@@ -47,9 +47,6 @@ def test_connect_to_broker(mock_url_params, mock_pika, rabbitmq_client):
     # Assert that the broker_logger's info method was called with the correct message
     rabbitmq_client.broker_logger.info.assert_called_with("Connected to RabbitMQ broker.")
 
-
-from unittest.mock import Mock
-
 @patch("pika.URLParameters")
 @patch("pika.BlockingConnection")
 def test_connect_to_broker_failure(mock_url_params, mock_pika, rabbitmq_client):
@@ -71,7 +68,6 @@ def test_connect_to_broker_failure(mock_url_params, mock_pika, rabbitmq_client):
     
     # Assert that the broker_logger's error method was called with the expected message
     rabbitmq_client.broker_logger.error.assert_called_with("Connection error: failure")
-
 
 @patch("requests.post")
 def test_execute_callback(mock_post, rabbitmq_client):

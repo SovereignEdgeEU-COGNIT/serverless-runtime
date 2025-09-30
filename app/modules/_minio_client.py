@@ -10,7 +10,6 @@ from botocore.exceptions import (
 )
 
 import os # For "download_files_with_prefix" method, can be deleted if method will not be used.
-import json
 from io import BytesIO
 
 cognit_logger = CognitLogger()
@@ -66,11 +65,16 @@ class MinioClient:
         try:
             cognit_logger.debug("Listing buckets...")
             response = self.s3_client.list_buckets()
+
             return [b['Name'] for b in response.get('Buckets', [])]
+        
         except (ConnectTimeoutError, ReadTimeoutError, EndpointConnectionError) as e:
+
             cognit_logger.error(f"MinIO unreachable or timeout occurred: {e}")
             return [f"ERROR MinIO unreachable or timeout occurred: {e}"]  # or return an error message, as you prefer
+        
         except ClientError as e:
+            
             cognit_logger.error(f"Failed to list buckets: {e}")
             return [f"ERROR Failed to list buckets: {e}"]
     
