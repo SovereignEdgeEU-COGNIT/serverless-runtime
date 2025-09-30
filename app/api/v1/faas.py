@@ -490,6 +490,3 @@ async def get_faas_uuid_status(faas_task_uuid: str):
             update_histogram_metrics(executor, get_vmid(), status==TaskState.OK)
 
         return response.dict()
-
-    
-
