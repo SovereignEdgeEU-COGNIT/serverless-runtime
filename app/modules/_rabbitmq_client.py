@@ -107,6 +107,11 @@ class RabbitMQClient:
             exec_response = request_data["payload"]
             request_id = request_data["request_id"]
 
+            self.broker_logger.info("Processing new message...")
+            self.broker_logger.info("Execution mode: " + str(exec_mode))
+            self.broker_logger.info("Request ID: " + str(request_id))
+            self.broker_logger.info("Payload: " + str(exec_response))
+
             # Determine execution mode
             if exec_mode == ExecutionMode.SYNC:
 

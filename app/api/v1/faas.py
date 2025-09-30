@@ -1,21 +1,18 @@
-from typing import Any, Tuple
-import time, re, socket
-from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, REGISTRY, Histogram
-from . import nano_pb2
-from google.protobuf.json_format import Parse, MessageToJson
-import json
-from fastapi import APIRouter, HTTPException, Response, Body
-from models.faas import *
-from modules._cexec import CExec
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Histogram
 from modules._faas_manager import FaasManager, TaskState
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec
-from modules._pyexec import PyExec #, start_pyexec_time, end_pyexec_time
-import modules._pyexec as p
-import logging, os
+from modules._pyexec import PyExec
+from modules._cexec import CExec
+from models.faas import *
+from . import nano_pb2
+
+from fastapi import APIRouter, HTTPException, Response
+from typing import Any, Tuple
 from threading import Lock
+import time, re
+import logging
 import sys
 
 cognit_logger = CognitLogger()
@@ -28,15 +25,18 @@ faas_parser = FaasParser()
 global app_req_id
 global executor
 global executor_lock  # Thread lock for executor
+
 executor = None
 executor_lock = Lock()
 
 def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
+
     decoded_fc = faas_parser.deserialize(input_fc.fc)
     decoded_params = [faas_parser.deserialize(p) for p in input_fc.params]
     return decoded_fc, decoded_params
 
 def get_vmid():
+
     with open("/var/run/one-context/one_env", "r") as file_one:
         patt = "VMID="
         for l in file_one:
@@ -54,6 +54,7 @@ def get_vmid():
 
 
 def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
+
     # Function is deserialized
     decoded_fc = faas_parser.b64_to_str(input_fc.fc)
     decoded_params = [faas_parser.b64_to_str(param) for param in input_fc.params]
@@ -199,6 +200,7 @@ def make_fc_executable(fc_str):
     
 
 def deserialize_protobuf_fc(input_fc: ExecSyncParams):
+    
     # Parse request body to MyFunc object
     cognit_logger.debug("Parsing function data...")
 
@@ -290,54 +292,74 @@ class CognitFuncExecCollector(object):
 
 # POST /v1/faas/execute-sync
 @faas_router.post("/execute-sync")
-async def execute_sync(offloaded_func: ExecSyncParams):
+async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
+    """
+    Execute a synchronous function.
+
+    Args:
+        offloaded_func (ExecSyncParams): The function and its parameters to execute.
+    
+    Returns:
+        ExecResponse: The result of the function execution.
+    """
+
     global executor
     global executor_lock
     global app_req_id
 
+    none_serialized = faas_parser.serialize(None)
+
     with executor_lock:  # Ensure proper locking
-        # cognit_logger.debug(f"Before execution, executor: {executor}")
         
         executor = None  # Reset executor before assignment
 
         if offloaded_func.lang == "PY":
+
             try:
+
                 app_req_id = str(offloaded_func.app_req_id)
                 fc, params = deserialize_py_fc(offloaded_func)
+
             except Exception as e:
+
                 cognit_logger.error(f"Error deserializing sync PY function: {e}")
-                raise HTTPException(status_code=400, detail=f"Error deserializing sync PY function: {e}")
+                return ExecResponse(res=none_serialized, ret_code=ExecReturnCode.ERROR, err=f"Error deserializing sync PY function: {e}").dict()
 
             if not callable(fc):
+
                 cognit_logger.error("Function is not callable")
-                raise HTTPException(status_code=400, detail="Not callable function")
+                return ExecResponse(res=none_serialized, ret_code=ExecReturnCode.ERROR, err="Not callable function").dict()
 
             executor = PyExec(fc=fc, params=params)
-            cognit_logger.debug("PyExec created successfully")
+            cognit_logger.debug("PyExec created successfully for PY function")
 
         elif offloaded_func.lang == "C":
+
             try:
-                #global app_req_id
+
                 app_req_id = str(offloaded_func.app_req_id)
                 fc, params = deserialize_protobuf_fc(offloaded_func)
+
             except Exception as e:
-                raise HTTPException(status_code=400, detail="Error deserializing sync C function. More details; {0}".format(e))
-        
+
+                cognit_logger.error(f"Error deserializing sync C function: {e}")
+                return ExecResponse(res=none_serialized, ret_code=ExecReturnCode.ERROR, err=f"Error deserializing sync C function: {e}").dict()
         
             if not callable(fc):
-                raise HTTPException(status_code=400, detail=" Not callable function")
-            executor = PyExec(fc=fc, params=params)
-        else:
-            raise HTTPException(
-                status_code=400, detail="Unsupported language. Supported languages: PY, C"
-            )
 
+                cognit_logger.error("Function is not callable")
+                return ExecResponse(res=none_serialized, ret_code=ExecReturnCode.ERROR, err="Not callable function").dict()
+            
+            executor = PyExec(fc=fc, params=params)
+            cognit_logger.debug("PyExec created successfully for C function")
+
+        else:
+            cognit_logger.error(f"Unsupported language: {offloaded_func.lang}")
+            return ExecResponse(res=none_serialized, ret_code=ExecReturnCode.ERROR, err="Unsupported language. Supported languages: PY, C").dict()
 
         if not executor:
             cognit_logger.error("Executor is None after assignment")
-            raise HTTPException(status_code=500, detail="Internal Server Error: Executor is None")
-
-        # cognit_logger.debug(f"Executor assigned: {executor}")
+            return ExecResponse(res=none_serialized, ret_code=ExecReturnCode.ERROR, err="Internal Server Error: Executor is None").dict()
 
         global off_func
         off_func = offloaded_func
@@ -357,33 +379,22 @@ async def execute_sync(offloaded_func: ExecSyncParams):
             del async_end_time
 
         # Run executor within lock
-        try:
-            executor.run()
-            sync_start_time = executor.start_pyexec_time
-            sync_end_time = executor.end_pyexec_time
-            update_histogram_metrics(executor, get_vmid())
-        except Exception as e:
-            cognit_logger.error(f"Unhandled exception during execution: {e}")
-            raise HTTPException(status_code=500, detail=f"Execution failed: {e}")
+        executor.run()
+        sync_start_time = executor.start_pyexec_time
+        sync_end_time = executor.end_pyexec_time
 
-        # Serialize result
-        try:
-            if offloaded_func.lang == "PY":
-                b64_res = faas_parser.serialize(executor.get_result())
-            if offloaded_func.lang == "C":
-                b64_res = faas_parser.any_to_b64(pb_serialize_result(executor.get_result()))
+        update_histogram_metrics(executor, get_vmid())
 
+        if offloaded_func.lang == "PY":
+            b64_res = faas_parser.serialize(executor.get_result())
 
-            result = ExecResponse(res=b64_res, ret_code=executor.get_ret_code(), err=executor.get_err())
-            cognit_logger.debug(f"Execution result: {result}")
+        if offloaded_func.lang == "C":
+            b64_res = faas_parser.any_to_b64(pb_serialize_result(executor.get_result()))
 
-            return result.dict()
+        result = ExecResponse(res=b64_res, ret_code=executor.get_ret_code(), err=executor.get_err())
+        cognit_logger.debug(f"Execution result: {result}")
 
-        except Exception as e:
-            cognit_logger.error(f"Error serializing response: {e}")
-            raise HTTPException(status_code=500, detail=f"Error serializing response: {e}")
-
-
+        return result.dict()
 
 # POST /v1/faas/execute-async
 @faas_router.post("/execute-async")
@@ -479,6 +490,3 @@ async def get_faas_uuid_status(faas_task_uuid: str):
             update_histogram_metrics(executor, get_vmid(), status==TaskState.OK)
 
         return response.dict()
-
-    
-
