@@ -125,11 +125,11 @@ def update_vm_template_with_metrics(vmid):
             # Update VM template with metrics
             for metric_name, value in metrics_data.items():
                 cmd = f"onegate vm update {vmid} --data \"{metric_name}={value}\""
-                cognit_logger.info(f"Updating VM template: {cmd}")
+                cognit_logger.debug(f"Updating VM template: {cmd}")
                 
                 result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
                 if result.returncode == 0:
-                    cognit_logger.info(f"Successfully updated {metric_name}={value}")
+                    cognit_logger.debug(f"Successfully updated {metric_name}={value}")
                 else:
                     cognit_logger.error(f"Failed to update {metric_name}: {result.stderr}")
         
@@ -137,10 +137,10 @@ def update_vm_template_with_metrics(vmid):
         cognit_logger.error(f"Error updating VM template: {e}")
 
 def get_prometheus_metrics(vmid):
-    """Get current histogram metrics from Prometheus for the given VM ID."""
+    """Get all Prometheus metrics for the given VM ID in a structured format."""
     try:
         import requests
-        import re
+        from prometheus_client.parser import text_string_to_metric_families
         
         # Query Prometheus metrics
         response = requests.get("http://localhost:9100/metrics", timeout=5)
@@ -150,41 +150,56 @@ def get_prometheus_metrics(vmid):
         metrics_text = response.text
         metrics_data = {}
         
-        # Extract only success metrics for the specific VM ID
-        success_count = 0
-        success_sum = 0
+        # Temporary storage for calculating averages
+        exec_time_success_count = 0
+        exec_time_success_sum = 0
         
-        # Get count and sum for success executions
-        count_pattern = rf'sr_histogram_func_exec_time_seconds_count\{{function_outcome="success",vmid="{re.escape(str(vmid))}"\}} (\d+(?:\.\d+)?)'
-        sum_pattern = rf'sr_histogram_func_exec_time_seconds_sum\{{function_outcome="success",vmid="{re.escape(str(vmid))}"\}} (\d+(?:\.\d+)?)'
+        # Parse all metrics into a structured format
+        for family in text_string_to_metric_families(metrics_text):
+            for sample in family.samples:
+
+                if 'vmid' in sample.labels:
+                    if sample.labels['vmid'] != str(vmid):
+                        continue
+                
+                metric_name = sample.name
+                metric_labels = sample.labels
+                metric_value = sample.value
+                
+                if metric_labels.get('function_outcome') == 'success':
+                    if 'le' in metric_labels:
+                        bucket_le = metric_labels['le']
+                        base_name = metric_name.replace('_bucket', '')
+                        
+                        if bucket_le == "+Inf":
+                            metrics_data[f"{base_name}_bucket_inf"] = metric_value
+                        else:
+                            try:
+                                bucket_int = int(float(bucket_le))
+                                if 'exec_time' in metric_name:
+                                    metrics_data[f"{base_name}_bucket_{bucket_int}s"] = metric_value
+                                elif 'input_size' in metric_name:
+                                    metrics_data[f"{base_name}_bucket_{bucket_int}b"] = metric_value
+                            except ValueError:
+                                pass 
+                    else:
+                        # Success metrics without 'le' label (count, sum, etc.)
+                        metrics_data[metric_name] = metric_value
+                
+                # Metrics without function_outcome label (counters, gauges, etc.)
+                elif 'function_outcome' not in metric_labels:
+                    metrics_data[metric_name] = metric_value
         
-        count_match = re.search(count_pattern, metrics_text)
-        sum_match = re.search(sum_pattern, metrics_text)
+        # Calculate and store the average execution time for success
+        exec_count_key = "sr_histogram_func_exec_time_seconds_count"
+        exec_sum_key = "sr_histogram_func_exec_time_seconds_sum"
         
-        if count_match:
-            success_count = float(count_match.group(1))
-        if sum_match:
-            success_sum = float(sum_match.group(1))
-        
-        # Calculate average execution time for success
-        if success_count > 0:
-            metrics_data["SR_EXEC_TIME_SUCCESS_AVG"] = round(success_sum / success_count, 3)
-        
-        # Extract bucket metrics for success executions
-        bucket_pattern = rf'sr_histogram_func_exec_time_seconds_bucket\{{function_outcome="success",le="([^"]+)",vmid="{re.escape(str(vmid))}"\}} (\d+(?:\.\d+)?)'
-        
-        for bucket_match in re.finditer(bucket_pattern, metrics_text):
-            bucket_le = bucket_match.group(1)
-            bucket_value = int(float(bucket_match.group(2)))
-            
-            if bucket_le == "1.0":
-                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_1S"] = bucket_value
-            elif bucket_le == "5.0":
-                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_5S"] = bucket_value
-            elif bucket_le == "10.0":
-                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_10S"] = bucket_value
-            elif bucket_le == "+Inf":
-                metrics_data["SR_EXEC_TIME_SUCCESS_BUCKET_INF"] = bucket_value
+        if exec_count_key in metrics_data and metrics_data[exec_count_key] > 0:
+            metrics_data["sr_exec_time_success_avg"] = round(
+                metrics_data[exec_sum_key] / metrics_data[exec_count_key], 3
+            )
+        else:
+            metrics_data["sr_exec_time_success_avg"] = 0
         
         cognit_logger.info(f"Extracted metrics for VM {vmid}: {metrics_data}")
         return metrics_data
