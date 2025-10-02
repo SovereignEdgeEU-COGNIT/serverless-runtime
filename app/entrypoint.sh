@@ -24,6 +24,11 @@ if [[ -z "$COGNIT_BROKER" || -z "$COGNIT_FLAVOUR" ]]; then
   echo "COGNIT_BROKER or COGNIT_FLAVOUR is not set."
 fi
 
+cd /root/serverless-runtime/
+source serverless-env/bin/activate
+
 # Start the API with Uvicorn and save the PID
-python3 main.py --host "0.0.0.0" --port 8000 --broker "$COGNIT_BROKER" --flavour "$COGNIT_FLAVOUR" &
+python3 app/main.py --host "0.0.0.0" --port 8000 --broker "$COGNIT_BROKER" --flavour "$COGNIT_FLAVOUR" &
 echo $! > "$PID_FILE"
+
+nohup python3 prometheus_metrics_injection.py --interval 5 &
