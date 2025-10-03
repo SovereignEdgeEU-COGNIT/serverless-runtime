@@ -75,42 +75,48 @@ def get_prometheus_metrics(vmid):
                 metric_labels = sample.labels
                 metric_value = sample.value
                 
+                app_req_id = metric_labels.get('app_req_id')
+                if app_req_id is None:
+                    continue
+                
                 if metric_labels.get('function_outcome') == 'success':
                     if 'le' in metric_labels:
                         bucket_le = metric_labels['le']
                         base_name = metric_name.replace('_bucket', '')
                         
                         if bucket_le == "+Inf":
-                            metrics_data[f"{base_name}_bucket_inf"] = metric_value
+                            metrics_data[f"{base_name}_bucket_inf_app_req_id_{app_req_id}"] = metric_value
                         else:
                             try:
                                 bucket_int = int(float(bucket_le))
                                 if 'exec_time' in metric_name:
-                                    metrics_data[f"{base_name}_bucket_{bucket_int}s"] = metric_value
+                                    metrics_data[f"{base_name}_bucket_{bucket_int}s_app_req_id_{app_req_id}"] = metric_value
                                 elif 'input_size' in metric_name:
-                                    metrics_data[f"{base_name}_bucket_{bucket_int}b"] = metric_value
+                                    metrics_data[f"{base_name}_bucket_{bucket_int}b_app_req_id_{app_req_id}"] = metric_value
                             except ValueError:
                                 pass 
                     else:
                         # Success metrics without 'le' label (count, sum, etc.)
-                        metrics_data[metric_name] = metric_value
+                        metrics_data[f"{metric_name}_app_req_id_{app_req_id}"] = metric_value
                 
                 # Metrics without function_outcome label (counters, gauges, etc.)
                 elif 'function_outcome' not in metric_labels:
-                    metrics_data[metric_name] = metric_value
+                    metrics_data[f"{metric_name}_app_req_id_{app_req_id}"] = metric_value
         
-        # Calculate and store the average execution time for success
-        exec_count_key = "sr_histogram_func_exec_time_seconds_count"
-        exec_sum_key = "sr_histogram_func_exec_time_seconds_sum"
+        # Calculate and store the average execution time for success per app_req_id
+        for key in list(metrics_data.keys()):
+            if 'sr_histogram_func_exec_time_seconds_count_app_req_id_' in key:
+                app_id = key.replace('sr_histogram_func_exec_time_seconds_count_app_req_id_', '')
+                total_func_exec_count = f"sr_histogram_func_exec_time_seconds_count_app_req_id_{app_id}"
+                total_func_exec_time = f"sr_histogram_func_exec_time_seconds_sum_app_req_id_{app_id}"
+                
+                if total_func_exec_count in metrics_data and metrics_data[total_func_exec_count] > 0:
+                    metrics_data[f"sr_exec_time_success_avg_app_req_id_{app_id}"] = round(
+                        metrics_data[total_func_exec_time] / metrics_data[total_func_exec_count], 3
+                    )
+                    cognit_logger.info(f"Average execution time for app_req_id {app_id}: {metrics_data[f'sr_exec_time_success_avg_app_req_id_{app_id}']}")
         
-        if exec_count_key in metrics_data and metrics_data[exec_count_key] > 0:
-            metrics_data["sr_exec_time_success_avg"] = round(
-                metrics_data[exec_sum_key] / metrics_data[exec_count_key], 3
-            )
-        else:
-            metrics_data["sr_exec_time_success_avg"] = 0
-        
-        cognit_logger.info(f"Extracted metrics for VM {vmid}: {metrics_data}")
+        cognit_logger.debug(f"Total number of metrics for VM {vmid}: {len(metrics_data.keys())}")
         return metrics_data
         
     except Exception as e:
