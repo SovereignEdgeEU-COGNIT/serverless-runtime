@@ -6,166 +6,216 @@ import pydantic
 import requests
 import pika
 import json
+import time
 
 class RabbitMQClient:
+    """
+    Thread-safe RabbitMQ consumer that delegates heavy message processing
+    to background threads and maintains stable heartbeats.
+    """
 
     def __init__(self, host: str, queue: str):
         """
         Initializes the RabbitMQ broker connection parameters.
-
         Args:
-            host (str): The hostname or IP address of the RabbitMQ broker. Defaults to 'localhost'.
-            queue (str): The name of the queue to connect to. Defaults to 'flavour_queue'.
+            host (str): The RabbitMQ broker URL (amqp://user:pass@host/vhost?heartbeat=300).
+            queue (str): Queue name to consume messages from.
         """
 
         self.host = host
         self.queue = queue
         self.channel = None
         self.connection = None
+        self.should_stop = threading.Event()
         self.broker_logger = CognitLogger()
-        
+
+    # ------------------- Connection Management ------------------- #
+
     def _connect_to_broker(self) -> int:
         """
-        Connects to the RabbitMQ broker on the specified host.
+        Connect to RabbitMQ broker with heartbeat and timeouts.
 
         Returns:
-            int: 0 if the connection is successful, -1 if there is an error.
+            int: 0 on success, -1 on failure.
         """
+
         try:
 
             params = pika.URLParameters(self.host)
+            params.heartbeat = 60
+            params.blocked_connection_timeout = 600
+
             self.connection = pika.BlockingConnection(params)
             self.channel = self.connection.channel()
+            self.channel.queue_declare(queue=self.queue, durable=True)
+
             self.broker_logger.info("Connected to RabbitMQ broker.")
             return 0
-        
+
         except Exception as e:
 
             self.broker_logger.error(f"Connection error: {e}")
             return -1
-        
+
+    # ------------------- Consumer Loop ------------------- #
+
     def run(self):
         """
-        Connects to the queue and listens for incoming JSON messages.
+        Start consuming messages indefinitely with auto-reconnect.
 
-        If the connection fails, logs an error and exits the program.
-
+        This method runs in the main thread and spawns worker threads for processing.
         """
 
-        if self._connect_to_broker() == -1:
+        while not self.should_stop.is_set():
 
-            self.broker_logger.error("Unable to connect to RabbitMQ broker. Exiting...")
-            exit(-1)
+            if self._connect_to_broker() == -1:
 
-        # Declare queue
-        self.channel.queue_declare(queue=self.queue)
-        
-        # Set callback to handle incoming messages
-        self.channel.basic_consume(queue=self.queue, on_message_callback=self._execute_callback)
-        self.broker_logger.info("Waiting for executions...")
+                self.broker_logger.error("Unable to connect. Retrying in 5s...")
+                time.sleep(5)
+                continue
 
-        # Listen indefinitely
-        try: 
+            try:
 
-            self.channel.start_consuming()
+                self.channel.basic_qos(prefetch_count=1)
+                self.channel.basic_consume(
+                    queue=self.queue,
+                    on_message_callback=self._execute_callback
+                )
 
-        except Exception as e:
+                self.broker_logger.info("Waiting for executions...")
+                self.channel.start_consuming()
 
-            self.broker_logger.error(f"Error in message consumption: {e}")
-            exit(-1)
-    
+            except pika.exceptions.AMQPHeartbeatTimeout:
+
+                self.broker_logger.warning("Missed heartbeat — reconnecting...")
+                continue
+
+            except pika.exceptions.StreamLostError:
+
+                self.broker_logger.warning("Connection lost — reconnecting...")
+                continue
+
+            except Exception as e:
+
+                self.broker_logger.error(f"Error in message consumption: {e}")
+                time.sleep(5)
+                continue
+
+    # ------------------- Callback & Processing ------------------- #
+
     def _execute_callback(self, ch, method, properties, body):
         """
-        Callback function that processes received JSON messages.
+        Spawns a worker thread to process a message.
 
         Args:
-            ch: The RabbitMQ channel object.
-            method: Provides delivery information such as the delivery tag.
-            properties: Message properties including reply_to and correlation_id.
-            body: The message body, expected to be a JSON-formatted string.
+            ch: Channel object.
+            method: Method frame with delivery tag.
+            properties: Properties of the message.
+            body: Message body (bytes).
         """
 
-        thread = threading.Thread(target=self._process_message, args=(ch, method, body))
-        thread.daemon = True
-        thread.start()
+        worker = threading.Thread(
+            target=self._process_message, args=(ch, method, body), daemon=True
+        )
+        worker.start()
 
     def _process_message(self, ch, method, body):
         """
-        Processes incoming messages from the RabbitMQ queue.
-
+        Processes a single message and sends results back.
+        
         Args:
-            ch: The RabbitMQ channel object.
-            method: Provides delivery information such as the delivery tag.
-            body: The message body, expected to be a JSON-formatted string.
+            ch: Channel object.
+            method: Method frame with delivery tag.
+            body: Message body (bytes).
         """
-
         try:
-
-            # Receive JSON message
             request_data = json.loads(body)
-            exec_mode = request_data["mode"]
-            exec_response = request_data["payload"]
-            request_id = request_data["request_id"]
+            exec_mode = request_data.get("mode")
+            exec_payload = request_data.get("payload")
+            request_id = request_data.get("request_id")
 
-            self.broker_logger.info("Processing new message...")
-            self.broker_logger.info("Execution mode: " + str(exec_mode))
-            self.broker_logger.info("Request ID: " + str(request_id))
-            self.broker_logger.info("Payload: " + str(exec_response))
+            self.broker_logger.info(f"🔧 Processing new message [ID={request_id}]")
 
-            # Determine execution mode
+            # Determine URI
             if exec_mode == ExecutionMode.SYNC:
-
+                uri = "http://localhost:8000/v1/faas/execute-sync"
+            else:
                 uri = "http://localhost:8000/v1/faas/execute-sync"
 
-            elif exec_mode == ExecutionMode.ASYNC:
-
-                uri = "http://localhost:8000/v1/faas/execute-sync"  # TODO: Async executions should be handled differently
-
-            # Send JSON to local REST API
-            response = requests.post(uri, json=exec_response)
-            response_data = response.json()
+            # Send to local API
+            response = requests.post(uri, json=exec_payload)
             status_code = response.status_code
-            
-            self.broker_logger.info("Response received: " + str(response_data))
-            self.broker_logger.info("Of type: " + str(type(response_data)))
-            
-            # Parse execution response
+            response_data = response.json()
+
+            self.broker_logger.info(f"Response received [{status_code}] for {request_id}")
+
+            # Parse and send result
             exec_response = pydantic.parse_obj_as(ExecResponse, response_data)
-            
-            # Send response to temporary queue
             self._send_result(exec_response, status_code, request_id)
 
         except Exception as e:
-
             self.broker_logger.error(f"Error processing message: {e}")
 
         finally:
 
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-    
+            try:
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+
+            except Exception as e:
+                self.broker_logger.warning(f"Ack failed: {e}")
+
+    # ------------------- Thread-safe Publisher ------------------- #
+
     def _send_result(self, response: ExecResponse, status_code: int, request_id: str):
         """
-        Sends the execution result to a temporary queue.
+        Sends execution result to a results exchange using a short-lived connection.
+        This avoids heartbeat loss due to thread-unsafe shared connections.
 
         Args:
-            response (ExecResponse): The execution response object.
-            request_id (str): The name of the temporary queue where the response should be sent.
-            correlation_id (str): A unique identifier for correlating requests and responses.
+            response (ExecResponse): The execution response to send.
+            status_code (int): HTTP status code of the execution.
+            request_id (str): Unique identifier for the request.
+        """
+        try:
+
+            params = pika.URLParameters(self.host)
+            params.heartbeat = 60
+
+            with pika.BlockingConnection(params) as conn:
+
+                channel = conn.channel()
+                body = {
+                    "code": status_code,
+                    "message": json.loads(response.json())
+                }
+                channel.basic_publish(
+                    exchange="results",
+                    routing_key=request_id,
+                    body=json.dumps(body)
+                )
+
+            self.broker_logger.info(f"Sent response to [{request_id}]")
+
+        except Exception as e:
+            self.broker_logger.error(f"Error sending result for {request_id}: {e}")
+
+
+    def stop(self):
+        """
+        Gracefully stops the consumer loop and closes connections.
         """
 
-        body = { 
-            "code": status_code, 
-            "message": json.loads(response.json())
-        }
-        
-        self.broker_logger.debug("Body: " + json.dumps(body))
-        self.broker_logger.debug("of type: " + str(type(body)))
+        self.should_stop.set()
 
-        # Publish the response to the temporary queue
-        self.channel.basic_publish(
-            exchange='results',
-            routing_key=request_id,
-            body=json.dumps(body)
-        )
+        try:
 
-        self.broker_logger.info("Response sent to temporary queue.")
+            if self.channel and self.channel.is_open:
+                self.channel.stop_consuming()
+
+            if self.connection and self.connection.is_open:
+                self.connection.close()
+
+            self.broker_logger.info("Stopped RabbitMQ client gracefully.")
+
+        except Exception as e:
+            self.broker_logger.warning(f"Error during shutdown: {e}")
