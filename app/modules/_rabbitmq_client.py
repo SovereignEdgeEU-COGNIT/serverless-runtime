@@ -47,7 +47,7 @@ class RabbitMQClient:
 
             self.connection = pika.BlockingConnection(params)
             self.channel = self.connection.channel()
-            self.channel.queue_declare(queue=self.queue, durable=True)
+            self.channel.queue_declare(queue=self.queue)
 
             self.broker_logger.info("Connected to RabbitMQ broker.")
             return 0
