@@ -31,25 +31,6 @@ class ExecutionMode(str, Enum):
     ASYNC = "async"
 
 
-class ExecAsyncParams(BaseModel):
-    lang: str = Field(
-        default="",
-        description="Language of the offloaded function",
-    )
-    fc: str = Field(
-        default="",
-        description="Function to be offloaded",
-    )
-    fc_hash: str = Field(
-        default="",
-        description="Hash of the function to be offloaded",
-    )
-    params: list[str] = Field(
-        default="",
-        description="List containing the serialized parameters by each device runtime transfered to the offloaded function",
-    )
-
-
 class FaasUuidStatus(BaseModel):
     state: str = Field(
         default="",
@@ -79,35 +60,6 @@ class ExecResponse(BaseModel):
         default=None,
         description="Offloaded function execution error description",
     )
-
-
-class AsyncExecId(BaseModel):
-    faas_task_uuid: str = Field(
-        default="",
-        description="UUID of the offloaded function processing task",
-    )
-
-
-class AsyncExecStatus(Enum):
-    WORKING = "WORKING"
-    READY = "READY"
-    FAILED = "FAILED"
-
-
-class AsyncExecResponse(BaseModel):
-    status: AsyncExecStatus = Field(
-        default=AsyncExecStatus.WORKING,
-        description="Status of the offloaded function processing task (WORKING if still executing READY if finished)",
-    )
-    res: Optional[ExecResponse] = Field(
-        default="",
-        description="Result of the offloaded function",
-    )
-    exec_id: AsyncExecId = Field(
-        default=AsyncExecId(faas_task_uuid="000-000-000"),
-        description="UUID of the offloaded function processing task",
-    )
-
 
 class Param(BaseModel):
     type: str

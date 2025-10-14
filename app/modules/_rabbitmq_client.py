@@ -136,11 +136,7 @@ class RabbitMQClient:
 
             self.broker_logger.info(f"🔧 Processing new message [ID={request_id}]")
 
-            # Determine URI
-            if exec_mode == ExecutionMode.SYNC:
-                uri = "http://localhost:8000/v1/faas/execute-sync"
-            else:
-                uri = "http://localhost:8000/v1/faas/execute-sync"
+            uri = "http://localhost:8000/v1/faas/execute-sync"
 
             # Send to local API
             response = requests.post(uri, json=exec_payload)
