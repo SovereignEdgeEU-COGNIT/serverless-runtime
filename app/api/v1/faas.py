@@ -4,7 +4,6 @@ from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec
 from modules._pyexec import PyExec
-from modules._cexec import CExec
 from models.faas import *
 from . import nano_pb2
 
@@ -29,7 +28,7 @@ global executor_lock  # Thread lock for executor
 executor = None
 executor_lock = Lock()
 
-def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
+def deserialize_py_fc(input_fc: ExecSyncParams) -> Tuple[Any, Any]:
 
     decoded_fc = faas_parser.deserialize(input_fc.fc)
     decoded_params = [faas_parser.deserialize(p) for p in input_fc.params]
@@ -53,7 +52,7 @@ def get_vmid():
                     cognit_logger.debug(f'Error while getting VM ID: {e}')
 
 
-def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
+def deserialize_c_fc(input_fc: ExecSyncParams) -> Tuple[Any, Any]:
 
     # Function is deserialized
     decoded_fc = faas_parser.b64_to_str(input_fc.fc)
@@ -243,6 +242,8 @@ class CognitFuncExecCollector(object):
             gauge = GaugeMetricFamily("sr_last_func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
             if 'async_end_time' in globals() and isinstance(async_end_time, float):
                 # Define variables for setting async labels
+                async_start_time=0
+                async_end_time=0
                 self.exec_async_time = async_end_time - async_start_time
                 self.a_st_t = time.ctime(async_start_time)
                 self.a_end_t = time.ctime(async_end_time)
