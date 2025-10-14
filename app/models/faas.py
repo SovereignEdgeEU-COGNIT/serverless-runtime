@@ -59,14 +59,3 @@ class ExecResponse(BaseModel):
         default=None,
         description="Offloaded function execution error description",
     )
-
-class Param(BaseModel):
-    type: str
-    var_name: str
-    value: Optional[Any]
-    mode: str
-
-    def __init__(self, **kwargs):
-        if "value" not in kwargs:
-            kwargs["value"] = None
-        super().__init__(**kwargs)
