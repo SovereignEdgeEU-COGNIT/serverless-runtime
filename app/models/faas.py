@@ -28,7 +28,6 @@ class ExecSyncParams(BaseModel):
 
 class ExecutionMode(str, Enum):
     SYNC = "sync"
-    ASYNC = "async"
 
 
 class FaasUuidStatus(BaseModel):

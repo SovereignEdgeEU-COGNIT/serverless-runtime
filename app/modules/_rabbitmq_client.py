@@ -1,4 +1,4 @@
-from models.faas import ExecResponse, ExecutionMode
+from models.faas import ExecResponse
 from modules._logger import CognitLogger
 
 import threading
