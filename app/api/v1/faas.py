@@ -79,7 +79,7 @@ input_size_histogram = Histogram(
 function_duration_seconds = Histogram(
     'function_duration_seconds',
     'Duration of function execution',
-    labelnames=['vm', 'function_id', 'app_req_id'],
+    labelnames=['vm', 'fc_hash', 'app_req_id'],
     buckets=[10.0, float("inf")]
 )
 
@@ -87,7 +87,7 @@ function_duration_seconds = Histogram(
 vm_current_function = Gauge(
     'vm_current_function',
     'Currently executing function (1 if running, 0 otherwise)',
-    labelnames=['vm', 'function_id', 'app_req_id']
+    labelnames=['vm', 'fc_hash', 'app_req_id']
 )
 
 # 3. Elapsed time of current function
@@ -125,26 +125,25 @@ def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
     except Exception as e:
         cognit_logger.error(f"Error updating metrics: {e}")
 
-# Helper functions for new metrics (alongside existing metric logic)
-def update_function_metrics_on_start(vmid, function_id, app_req_id):
+def update_function_metrics_on_start(vmid, fc_hash, app_req_id):
     """Set new metrics when function execution starts."""
     try:
         # Set current function gauge to 1
-        vm_current_function.labels(vm=vmid, function_id=function_id, app_req_id=app_req_id).set(1)
+        vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(1)
 
         # Set start timestamp
         vm_function_start_timestamp_seconds.labels(vm=vmid, app_req_id=app_req_id).set(time.time())
     except Exception as e:
         cognit_logger.error(f"Error updating new start metrics: {e}")
 
-def update_function_metrics_on_completion(vmid, function_id, app_req_id, duration):
+def update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration):
     """Update new metrics when function execution completes."""
     try:
         # Observe duration in histogram (automatically updates _sum and _count)
-        function_duration_seconds.labels(vm=vmid, function_id=function_id, app_req_id=app_req_id).observe(duration)
+        function_duration_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).observe(duration)
 
         # Reset current function gauge to 0
-        vm_current_function.labels(vm=vmid, function_id=function_id, app_req_id=app_req_id).set(0)
+        vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(0)
     except Exception as e:
         cognit_logger.error(f"Error updating new completion metrics: {e}")
 
@@ -416,8 +415,8 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
 
         # Initialize new metrics at start of execution (alongside existing metrics)
         vmid = get_vmid()
-        function_id = off_func.fc_hash if hasattr(off_func, 'fc_hash') else "unknown"
-        update_function_metrics_on_start(vmid, function_id, app_req_id)
+        fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
+        update_function_metrics_on_start(vmid, fc_hash, app_req_id)
 
         # Define sync metric exposure global variables
         global sync_start_time
@@ -437,9 +436,9 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
 
         # Update new metrics on completion (alongside existing metrics)
         vmid = get_vmid()
-        function_id = off_func.fc_hash if hasattr(off_func, 'fc_hash') else "unknown"
+        fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
         duration = sync_end_time - sync_start_time
-        update_function_metrics_on_completion(vmid, function_id, app_req_id, duration)
+        update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration)
 
         if offloaded_func.lang == "PY":
             b64_res = faas_parser.serialize(executor.get_result())
@@ -486,8 +485,8 @@ async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
 
         # Initialize new metrics at start of async execution (alongside existing metrics)
         vmid = get_vmid()
-        function_id = off_func.fc_hash if hasattr(off_func, 'fc_hash') else "unknown"
-        update_function_metrics_on_start(vmid, function_id, str(offloaded_func.app_req_id))
+        fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
+        update_function_metrics_on_start(vmid, fc_hash, str(offloaded_func.app_req_id))
 
         task_id = faas_manager.add_task(executor=executor)
         
@@ -552,9 +551,9 @@ async def get_faas_uuid_status(faas_task_uuid: str):
 
             # Update new metrics on completion (alongside existing metrics)
             vmid = get_vmid()
-            function_id = off_func.fc_hash if hasattr(off_func, 'fc_hash') else "unknown"
+            fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
             app_req_id = str(offloaded_func.app_req_id) if 'offloaded_func' in locals() else "unknown"
             duration = async_end_time - async_start_time if 'async_end_time' in globals() and 'async_start_time' in globals() else 0
-            update_function_metrics_on_completion(vmid, function_id, app_req_id, duration)
+            update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration)
 
         return response.dict()
