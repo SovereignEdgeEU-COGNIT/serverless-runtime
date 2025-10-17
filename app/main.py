@@ -1,4 +1,4 @@
-from api.v1.faas import faas_router, CognitFuncExecCollector, execution_time_histogram, input_size_histogram
+from api.v1.faas import faas_router, CognitFuncExecCollector, execution_time_histogram, input_size_histogram, function_duration_seconds, vm_current_function, vm_function_start_timestamp_seconds
 from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
 from prometheus_client import start_http_server, CollectorRegistry
 from modules._rabbitmq_client import RabbitMQClient
@@ -122,6 +122,11 @@ def initialize_prometheus():
     
     # Register COGNIT collector within the registry
     r.register(CognitFuncExecCollector())
+
+    # Register new metrics alongside existing ones (histogram for mean calculation)
+    r.register(function_duration_seconds)
+    r.register(vm_current_function)
+    r.register(vm_function_start_timestamp_seconds)
 
     local_ip = get_local_ip()
     # cognit_logger.debug(f"[PROM] local_ip: {local_ip}")
