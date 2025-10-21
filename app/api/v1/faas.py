@@ -132,7 +132,7 @@ def update_function_metrics_on_start(vmid, fc_hash, app_req_id):
         vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(1)
 
         # Set start timestamp
-        vm_function_start_timestamp_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(time.time())
+        vm_function_start_timestamp_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(int(time.time()))
     except Exception as e:
         cognit_logger.error(f"Error updating new start metrics: {e}")
 
