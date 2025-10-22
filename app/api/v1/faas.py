@@ -97,6 +97,12 @@ vm_function_start_timestamp_seconds = Gauge(
     labelnames=['vm', 'fc_hash', 'app_req_id']
 )
 
+# 4. VM execution status (global gauge, no labels)
+vm_is_executing = Gauge(
+    'vm_is_executing',
+    'Indicates if the VM is currently executing a function (1 = executing, 0 = idle)'
+)
+
 def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
     """Updates Prometheus metrics immediately after execution."""
     try:
@@ -130,9 +136,11 @@ def update_function_metrics_on_start(vmid, fc_hash, app_req_id):
     try:
         # Set current function gauge to 1
         vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(1)
-
         # Set start timestamp
         vm_function_start_timestamp_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(int(time.time()))
+    
+        vm_is_executing.set(1) #set vm_is_executing to 1 when execution starts
+
     except Exception as e:
         cognit_logger.error(f"Error updating new start metrics: {e}")
 
@@ -144,6 +152,8 @@ def update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration):
 
         # Reset current function gauge to 0
         vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(0)
+        # set vm_is_executing to 0 when execution completes
+        vm_is_executing.set(0)
     except Exception as e:
         cognit_logger.error(f"Error updating new completion metrics: {e}")
 

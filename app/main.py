@@ -1,4 +1,4 @@
-from api.v1.faas import faas_router, CognitFuncExecCollector, execution_time_histogram, input_size_histogram, function_duration_seconds, vm_current_function, vm_function_start_timestamp_seconds
+from api.v1.faas import faas_router, CognitFuncExecCollector, execution_time_histogram, input_size_histogram, function_duration_seconds, vm_current_function, vm_function_start_timestamp_seconds, vm_is_executing
 from ipaddress import ip_address as ipadd, IPv4Address, IPv6Address
 from prometheus_client import start_http_server, CollectorRegistry
 from modules._rabbitmq_client import RabbitMQClient
@@ -42,6 +42,36 @@ async def global_exception_handler(request: Request, exc: Exception):
 async def root():
     return "Main routes: \
             POST -> /v1/faas/execute-sync "
+
+@app.post("/control/stop-consuming")
+async def stop_consuming():
+    """
+    Gracefully stops the RabbitMQ consumer.
+    The consumer will stop accepting new messages but won't close connections forcefully.
+    Active threads will be allowed to finish.
+    """
+    
+    if rabbitmq_client is None:
+        cognit_logger.warning("RabbitMQ client is not running")
+        return JSONResponse(
+            status_code=404,
+            content={"status": "error", "message": "RabbitMQ client not initialized"}
+        )
+    
+    try:
+        cognit_logger.info("Stopping RabbitMQ consumer gracefully...")
+        rabbitmq_client.stop()
+        cognit_logger.info("RabbitMQ consumer stopped successfully")
+        return JSONResponse(
+            status_code=200,
+            content={"status": "success", "message": "RabbitMQ consumer stopped gracefully"}
+        )
+    except Exception as e:
+        cognit_logger.error(f"Error stopping RabbitMQ consumer: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": f"Failed to stop consumer: {str(e)}"}
+        )
 
 app.include_router(faas_router, prefix="/v1/faas")
 
@@ -127,6 +157,7 @@ def initialize_prometheus():
     r.register(function_duration_seconds)
     r.register(vm_current_function)
     r.register(vm_function_start_timestamp_seconds)
+    r.register(vm_is_executing)
 
     local_ip = get_local_ip()
     # cognit_logger.debug(f"[PROM] local_ip: {local_ip}")
@@ -163,6 +194,7 @@ if __name__ == "__main__":
     # Parse arguments
     args = parser.parse_args()
     
+    global rabbitmq_client
     cognit_logger.info(f"Starting RabbitMQ client in queue: {args.flavour}...")
     rabbitmq_client = RabbitMQClient(host=args.broker, queue=args.flavour)
     client_process = threading.Thread(target=rabbitmq_client.run, daemon=True)
