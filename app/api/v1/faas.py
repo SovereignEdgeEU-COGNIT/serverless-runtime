@@ -1,5 +1,4 @@
 from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Histogram
-from modules._faas_manager import FaasManager, TaskState
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec
@@ -17,7 +16,6 @@ import sys
 cognit_logger = CognitLogger()
 cognit_logger.set_level(logging.DEBUG)
 
-faas_manager = FaasManager()
 faas_router = APIRouter()
 faas_parser = FaasParser()
 
