@@ -48,7 +48,7 @@ def get_vmid():
                     old_vmid = vmid
                 except Exception as e:
                     cognit_logger.debug(f'Error while getting VM ID: {e}')
-
+VM_ID = get_vmid()
 
 def deserialize_c_fc(input_fc: ExecSyncParams) -> Tuple[Any, Any]:
 
@@ -62,19 +62,23 @@ execution_time_histogram = Histogram(
     'sr_histogram_func_exec_time_seconds',
     'Histogram of function execution time',
     buckets=[1, 5, 10],
-    labelnames=['vmid', 'function_outcome']
+    labelnames=['vmid', 'app_req_id', 'function_outcome']
 )
 
 input_size_histogram = Histogram(
     'sr_histogram_func_input_size_bytes',
     'Histogram of function input size',
     buckets=[1024, 1024 * 1024, 1024 * 1024 * 1024], # KB, MB, GB
-    labelnames=['vmid', 'function_outcome']
+    labelnames=['vmid', 'app_req_id', 'function_outcome']
 )
 
-def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
+def update_histogram_metrics(executor, vmid=None, asyncExecutionSuccess=None):
     """Updates Prometheus metrics immediately after execution."""
     try:
+        # Use cached VM_ID if vmid not provided
+        if vmid is None:
+            vmid = VM_ID
+            
         if asyncExecutionSuccess not in [True,False]:
             outcome = "success" if executor.get_ret_code() == ExecReturnCode.SUCCESS else "error"
         else:
@@ -85,7 +89,7 @@ def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
             input_size = sum(params_prom_label)
             cognit_logger.warning(f"Recording input size: {input_size}")
             if input_size > 0:
-                input_size_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(input_size))
+                input_size_histogram.labels(vmid=str(vmid), app_req_id=app_req_id, function_outcome=str(outcome)).observe(float(input_size))
             else:
                 cognit_logger.warning("Warning: params_prom_label sum is zero")
 
@@ -93,7 +97,8 @@ def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
         exec_time = executor.end_pyexec_time - executor.start_pyexec_time
         if isinstance(exec_time, (int, float)) and exec_time > 0:
             cognit_logger.warning(f"Recording execution time: {exec_time}")
-            execution_time_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(exec_time))
+            execution_time_histogram.labels(vmid=str(vmid), app_req_id=app_req_id, function_outcome=str(outcome)).observe(float(exec_time))
+
         else:
             cognit_logger.warning(f"Warning: exec_time is missing or invalid: {exec_time}")
 
@@ -262,23 +267,23 @@ class CognitFuncExecCollector(object):
                 self.exec_async_time = 0.0
                 
             # Add metric GAUGE for function status
-            func_status_labels = ['func_hash', 'vm_id', 'total_param_size']
+            func_status_labels = ['func_hash', 'vm_id', 'app_req_id', 'total_param_size']
             func_status_gauge = GaugeMetricFamily("sr_func_status", "Function execution status (RUNNING : 1.0, IDLE: 0.0)", labels=func_status_labels)
             
             global executor
             if executor is not None:
                 func_status = executor.get_status()
-                func_status_gauge.add_metric([off_func.fc_hash, vmid, str(sum(params_prom_label))], func_status)
+                func_status_gauge.add_metric([off_func.fc_hash, vmid, app_req_id, str(sum(params_prom_label))], func_status)
                 yield func_status_gauge
 
                 # Add counters for executed, succeeded, and failed functions
-                executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id'])
-                succeeded_counter = CounterMetricFamily("sr_func_succeeded_total", "Total number of succeeded functions", labels=['vm_id'])
-                failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id'])
+                executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id', 'app_req_id'])
+                succeeded_counter = CounterMetricFamily("sr_func_succeeded_total", "Total number of succeeded functions", labels=['vm_id', 'app_req_id'])
+                failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id', 'app_req_id'])
 
-                executed_counter.add_metric([vmid], executor.get_executed_func_counter())
-                succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
-                failed_counter.add_metric([vmid], executor.get_failed_func_counter())
+                executed_counter.add_metric([vmid, app_req_id], executor.get_executed_func_counter())
+                succeeded_counter.add_metric([vmid, app_req_id], executor.get_successed_func_counter())
+                failed_counter.add_metric([vmid, app_req_id], executor.get_failed_func_counter())
 
                 yield executed_counter
                 yield succeeded_counter
@@ -378,12 +383,19 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
             del async_end_time
 
         # Run executor within lock
-        executor.run()
-        sync_start_time = executor.start_pyexec_time
-        sync_end_time = executor.end_pyexec_time
+        try:
+            executor.run()
+            sync_start_time = executor.start_pyexec_time
+            sync_end_time = executor.end_pyexec_time
+            # TODO:: Test why 'get_vmid()' was removed by DMingolla
+            update_histogram_metrics(executor)
+            # update_histogram_metrics(executor, get_vmid())
 
-        update_histogram_metrics(executor, get_vmid())
+        except Exception as e:
+            cognit_logger.error(f"Unhandled exception during execution: {e}")
+            raise HTTPException(status_code=500, detail=f"Execution failed: {e}")
 
+      
         if offloaded_func.lang == "PY":
             b64_res = faas_parser.serialize(executor.get_result())
 
