@@ -1,4 +1,4 @@
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Histogram
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Histogram, Gauge, Counter
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec
@@ -48,7 +48,6 @@ def get_vmid():
                     old_vmid = vmid
                 except Exception as e:
                     cognit_logger.debug(f'Error while getting VM ID: {e}')
-VM_ID = get_vmid()
 
 def deserialize_c_fc(input_fc: ExecSyncParams) -> Tuple[Any, Any]:
 
@@ -62,23 +61,47 @@ execution_time_histogram = Histogram(
     'sr_histogram_func_exec_time_seconds',
     'Histogram of function execution time',
     buckets=[1, 5, 10],
-    labelnames=['vmid', 'app_req_id', 'function_outcome']
+    labelnames=['vmid', 'function_outcome']
 )
 
 input_size_histogram = Histogram(
     'sr_histogram_func_input_size_bytes',
     'Histogram of function input size',
     buckets=[1024, 1024 * 1024, 1024 * 1024 * 1024], # KB, MB, GB
-    labelnames=['vmid', 'app_req_id', 'function_outcome']
+    labelnames=['vmid', 'function_outcome']
 )
 
-def update_histogram_metrics(executor, vmid=None, asyncExecutionSuccess=None):
+# 1. Average execution time per function
+function_duration_seconds = Histogram(
+    'function_duration_seconds',
+    'Duration of function execution',
+    labelnames=['vm', 'fc_hash', 'app_req_id'],
+    buckets=[10.0, float("inf")]
+)
+
+# 2. Currently executing function ID
+vm_current_function = Gauge(
+    'vm_current_function',
+    'Currently executing function (1 if running, 0 otherwise)',
+    labelnames=['vm', 'fc_hash', 'app_req_id']
+)
+
+# 3. Elapsed time of current function
+vm_function_start_timestamp_seconds = Gauge(
+    'vm_function_start_timestamp_seconds',
+    'Timestamp when current function started execution',
+    labelnames=['vm', 'fc_hash', 'app_req_id']
+)
+
+# 4. VM execution status (global gauge, no labels)
+vm_is_executing = Gauge(
+    'vm_is_executing',
+    'Indicates if the VM is currently executing a function (1 = executing, 0 = idle)'
+)
+
+def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
     """Updates Prometheus metrics immediately after execution."""
     try:
-        # Use cached VM_ID if vmid not provided
-        if vmid is None:
-            vmid = VM_ID
-            
         if asyncExecutionSuccess not in [True,False]:
             outcome = "success" if executor.get_ret_code() == ExecReturnCode.SUCCESS else "error"
         else:
@@ -89,7 +112,7 @@ def update_histogram_metrics(executor, vmid=None, asyncExecutionSuccess=None):
             input_size = sum(params_prom_label)
             cognit_logger.warning(f"Recording input size: {input_size}")
             if input_size > 0:
-                input_size_histogram.labels(vmid=str(vmid), app_req_id=app_req_id, function_outcome=str(outcome)).observe(float(input_size))
+                input_size_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(input_size))
             else:
                 cognit_logger.warning("Warning: params_prom_label sum is zero")
 
@@ -97,13 +120,38 @@ def update_histogram_metrics(executor, vmid=None, asyncExecutionSuccess=None):
         exec_time = executor.end_pyexec_time - executor.start_pyexec_time
         if isinstance(exec_time, (int, float)) and exec_time > 0:
             cognit_logger.warning(f"Recording execution time: {exec_time}")
-            execution_time_histogram.labels(vmid=str(vmid), app_req_id=app_req_id, function_outcome=str(outcome)).observe(float(exec_time))
-
+            execution_time_histogram.labels(vmid=str(vmid), function_outcome=str(outcome)).observe(float(exec_time))
         else:
             cognit_logger.warning(f"Warning: exec_time is missing or invalid: {exec_time}")
 
     except Exception as e:
         cognit_logger.error(f"Error updating metrics: {e}")
+
+def update_function_metrics_on_start(vmid, fc_hash, app_req_id):
+    """Set new metrics when function execution starts."""
+    try:
+        # Set current function gauge to 1
+        vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(1)
+        # Set start timestamp
+        vm_function_start_timestamp_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(int(time.time()))
+    
+        vm_is_executing.set(1) #set vm_is_executing to 1 when execution starts
+
+    except Exception as e:
+        cognit_logger.error(f"Error updating new start metrics: {e}")
+
+def update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration):
+    """Update new metrics when function execution completes."""
+    try:
+        # Observe duration in histogram (automatically updates _sum and _count)
+        function_duration_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).observe(duration)
+
+        # Reset current function gauge to 0
+        vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(0)
+        # set vm_is_executing to 0 when execution completes
+        vm_is_executing.set(0)
+    except Exception as e:
+        cognit_logger.error(f"Error updating new completion metrics: {e}")
 
 def pb_serialize_result(result):
     
@@ -245,49 +293,47 @@ class CognitFuncExecCollector(object):
             gauge = GaugeMetricFamily("sr_last_func_exec_time", f'Function execution time (in seconds) within VM_ID: {vmid}', labels=labels)
             if 'async_end_time' in globals() and isinstance(async_end_time, float):
                 # Define variables for setting async labels
-                async_start_time=0
-                async_end_time=0
                 self.exec_async_time = async_end_time - async_start_time
                 self.a_st_t = time.ctime(async_start_time)
                 self.a_end_t = time.ctime(async_end_time)
                 # Add async metric
                 metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t, app_req_id, str(sum(params_prom_label))]
                 gauge.add_metric(metric_label_values, self.exec_async_time)
-                yield gauge 
+                #yield gauge 
             elif 'sync_end_time' in globals() and isinstance(sync_end_time, float) and\
                 'sync_start_time' in globals() and isinstance(sync_start_time, float):
                 # Define variables for setting sync labels    
                 self.exec_time = sync_end_time - sync_start_time
                 # Add sync metric
                 metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t, app_req_id, str(sum(params_prom_label))]
-                gauge.add_metric(metric_label_values, self.exec_time)
-                yield gauge
+                #gauge.add_metric(metric_label_values, self.exec_time)
+                #yield gauge
             else:    
                 self.exec_time = 0.0
                 self.exec_async_time = 0.0
                 
             # Add metric GAUGE for function status
-            func_status_labels = ['func_hash', 'vm_id', 'app_req_id', 'total_param_size']
+            func_status_labels = ['func_hash', 'vm_id', 'total_param_size']
             func_status_gauge = GaugeMetricFamily("sr_func_status", "Function execution status (RUNNING : 1.0, IDLE: 0.0)", labels=func_status_labels)
             
             global executor
             if executor is not None:
                 func_status = executor.get_status()
-                func_status_gauge.add_metric([off_func.fc_hash, vmid, app_req_id, str(sum(params_prom_label))], func_status)
-                yield func_status_gauge
+                #func_status_gauge.add_metric([off_func.fc_hash, vmid, str(sum(params_prom_label))], func_status)
+                #yield func_status_gauge
 
                 # Add counters for executed, succeeded, and failed functions
-                executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id', 'app_req_id'])
-                succeeded_counter = CounterMetricFamily("sr_func_succeeded_total", "Total number of succeeded functions", labels=['vm_id', 'app_req_id'])
-                failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id', 'app_req_id'])
+                executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id'])
+                succeeded_counter = CounterMetricFamily("sr_func_succeeded_total", "Total number of succeeded functions", labels=['vm_id'])
+                failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id'])
 
-                executed_counter.add_metric([vmid, app_req_id], executor.get_executed_func_counter())
-                succeeded_counter.add_metric([vmid, app_req_id], executor.get_successed_func_counter())
-                failed_counter.add_metric([vmid, app_req_id], executor.get_failed_func_counter())
+                executed_counter.add_metric([vmid], executor.get_executed_func_counter())
+                #succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
+                #failed_counter.add_metric([vmid], executor.get_failed_func_counter())
 
                 yield executed_counter
-                yield succeeded_counter
-                yield failed_counter
+                #yield succeeded_counter
+                #yield failed_counter
                 
                 
         except Exception as e:
@@ -373,6 +419,11 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
             params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
             params_prom_label.insert(0, params.__sizeof__())
 
+        # Initialize new metrics at start of execution (alongside existing metrics)
+        vmid = get_vmid()
+        fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
+        update_function_metrics_on_start(vmid, fc_hash, app_req_id)
+
         # Define sync metric exposure global variables
         global sync_start_time
         global sync_end_time
@@ -383,19 +434,18 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
             del async_end_time
 
         # Run executor within lock
-        try:
-            executor.run()
-            sync_start_time = executor.start_pyexec_time
-            sync_end_time = executor.end_pyexec_time
-            # TODO:: Test why 'get_vmid()' was removed by DMingolla
-            update_histogram_metrics(executor)
-            # update_histogram_metrics(executor, get_vmid())
+        executor.run()
+        sync_start_time = executor.start_pyexec_time
+        sync_end_time = executor.end_pyexec_time
 
-        except Exception as e:
-            cognit_logger.error(f"Unhandled exception during execution: {e}")
-            raise HTTPException(status_code=500, detail=f"Execution failed: {e}")
+        update_histogram_metrics(executor, get_vmid())
 
-      
+        # Update new metrics on completion (alongside existing metrics)
+        vmid = get_vmid()
+        fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
+        duration = sync_end_time - sync_start_time
+        update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration)
+
         if offloaded_func.lang == "PY":
             b64_res = faas_parser.serialize(executor.get_result())
 
