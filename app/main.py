@@ -147,8 +147,8 @@ def initialize_prometheus():
 
     # Create Prometheus registry
     r = CollectorRegistry()
-    #r.register(execution_time_histogram)
-    #r.register(input_size_histogram)
+    r.register(execution_time_histogram)
+    r.register(input_size_histogram)
     
     # Register COGNIT collector within the registry
     r.register(CognitFuncExecCollector())
