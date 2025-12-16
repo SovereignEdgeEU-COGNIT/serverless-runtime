@@ -34,7 +34,7 @@ In order to quickly run a serverless runtime instance a user can make use of the
 
 ```bash
 cd app/
-uvicorn main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --host 0.0.0.0 --port 8000 --broker "$COGNIT_BROKER" --flavour "$COGNIT_FLAVOUR"
 ```
 
 ```log
@@ -61,5 +61,3 @@ pytest --log-cli-level=DEBUG -s test_faas.py
 pytest --log-cli-level=DEBUG -s test_cexec.py
 pytest --log-cli-level=DEBUG -s test_pyexec.py
 ```
-
-A README document is available in `docs/`, explaining how to test synchronous and asynchronous execution calls.  
