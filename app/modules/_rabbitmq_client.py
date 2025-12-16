@@ -1,4 +1,4 @@
-from models.faas import ExecResponse, ExecutionMode
+from models.faas import ExecResponse
 from modules._logger import CognitLogger
 
 import threading
@@ -28,6 +28,8 @@ class RabbitMQClient:
         self.connection = None
         self.should_stop = threading.Event()
         self.broker_logger = CognitLogger()
+        self.active_workers = []  # Track active worker threads
+        self.workers_lock = threading.Lock()  # Protect the list
 
     # ------------------- Connection Management ------------------- #
 
@@ -115,9 +117,27 @@ class RabbitMQClient:
         """
 
         worker = threading.Thread(
-            target=self._process_message, args=(ch, method, body), daemon=True
+            target=self._process_message_wrapper, args=(ch, method, body), daemon=True
         )
+        
+        # Track the worker thread
+        with self.workers_lock:
+            self.active_workers.append(worker)
+        
         worker.start()
+
+    def _process_message_wrapper(self, ch, method, body):
+        """
+        Wrapper that calls _process_message and removes thread from active workers when done.
+        """
+        try:
+            self._process_message(ch, method, body)
+        finally:
+            # Remove this thread from active workers
+            with self.workers_lock:
+                current_thread = threading.current_thread()
+                if current_thread in self.active_workers:
+                    self.active_workers.remove(current_thread)
 
     def _process_message(self, ch, method, body):
         """
@@ -136,11 +156,7 @@ class RabbitMQClient:
 
             self.broker_logger.info(f"🔧 Processing new message [ID={request_id}]")
 
-            # Determine URI
-            if exec_mode == ExecutionMode.SYNC:
-                uri = "http://localhost:8000/v1/faas/execute-sync"
-            else:
-                uri = "http://localhost:8000/v1/faas/execute-sync"
+            uri = "http://localhost:8000/v1/faas/execute-sync"
 
             # Send to local API
             response = requests.post(uri, json=exec_payload)
@@ -203,15 +219,28 @@ class RabbitMQClient:
     def stop(self):
         """
         Gracefully stops the consumer loop and closes connections.
+        Waits for all active worker threads to complete before closing.
         """
 
         self.should_stop.set()
 
         try:
-
+            # Stop consuming new messages
             if self.channel and self.channel.is_open:
                 self.channel.stop_consuming()
+                self.broker_logger.info("Stopped consuming new messages from queue.")
 
+            # Wait for all active worker threads to complete
+            with self.workers_lock:
+                workers_to_wait = list(self.active_workers)
+            
+            if workers_to_wait:
+                self.broker_logger.info(f"Waiting for {len(workers_to_wait)} active worker(s) to complete...")
+                for worker in workers_to_wait:
+                    worker.join()  # Wait until all workers complete
+                self.broker_logger.info("All workers completed.")
+
+            # Now close the connection
             if self.connection and self.connection.is_open:
                 self.connection.close()
 
