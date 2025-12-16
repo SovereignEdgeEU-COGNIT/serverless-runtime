@@ -1,10 +1,8 @@
-from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Histogram
-from modules._faas_manager import FaasManager, TaskState
+from prometheus_client.core import GaugeMetricFamily, CounterMetricFamily, Histogram, Gauge, Counter
 from modules._faas_parser import FaasParser
 from modules._logger import CognitLogger
 from modules._pyexec import PyExec
 from modules._pyexec import PyExec
-from modules._cexec import CExec
 from models.faas import *
 from . import nano_pb2
 
@@ -18,7 +16,6 @@ import sys
 cognit_logger = CognitLogger()
 cognit_logger.set_level(logging.DEBUG)
 
-faas_manager = FaasManager()
 faas_router = APIRouter()
 faas_parser = FaasParser()
 
@@ -29,7 +26,7 @@ global executor_lock  # Thread lock for executor
 executor = None
 executor_lock = Lock()
 
-def deserialize_py_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
+def deserialize_py_fc(input_fc: ExecSyncParams) -> Tuple[Any, Any]:
 
     decoded_fc = faas_parser.deserialize(input_fc.fc)
     decoded_params = [faas_parser.deserialize(p) for p in input_fc.params]
@@ -52,8 +49,7 @@ def get_vmid():
                 except Exception as e:
                     cognit_logger.debug(f'Error while getting VM ID: {e}')
 
-
-def deserialize_c_fc(input_fc: ExecSyncParams | ExecAsyncParams) -> Tuple[Any, Any]:
+def deserialize_c_fc(input_fc: ExecSyncParams) -> Tuple[Any, Any]:
 
     # Function is deserialized
     decoded_fc = faas_parser.b64_to_str(input_fc.fc)
@@ -73,6 +69,34 @@ input_size_histogram = Histogram(
     'Histogram of function input size',
     buckets=[1024, 1024 * 1024, 1024 * 1024 * 1024], # KB, MB, GB
     labelnames=['vmid', 'function_outcome']
+)
+
+# 1. Average execution time per function
+function_duration_seconds = Histogram(
+    'function_duration_seconds',
+    'Duration of function execution',
+    labelnames=['vm', 'fc_hash', 'app_req_id'],
+    buckets=[10.0, float("inf")]
+)
+
+# 2. Currently executing function ID
+vm_current_function = Gauge(
+    'vm_current_function',
+    'Currently executing function (1 if running, 0 otherwise)',
+    labelnames=['vm', 'fc_hash', 'app_req_id']
+)
+
+# 3. Elapsed time of current function
+vm_function_start_timestamp_seconds = Gauge(
+    'vm_function_start_timestamp_seconds',
+    'Timestamp when current function started execution',
+    labelnames=['vm', 'fc_hash', 'app_req_id']
+)
+
+# 4. VM execution status (global gauge, no labels)
+vm_is_executing = Gauge(
+    'vm_is_executing',
+    'Indicates if the VM is currently executing a function (1 = executing, 0 = idle)'
 )
 
 def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
@@ -102,6 +126,32 @@ def update_histogram_metrics(executor, vmid, asyncExecutionSuccess=None):
 
     except Exception as e:
         cognit_logger.error(f"Error updating metrics: {e}")
+
+def update_function_metrics_on_start(vmid, fc_hash, app_req_id):
+    """Set new metrics when function execution starts."""
+    try:
+        # Set current function gauge to 1
+        vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(1)
+        # Set start timestamp
+        vm_function_start_timestamp_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(int(time.time()))
+    
+        vm_is_executing.set(1) #set vm_is_executing to 1 when execution starts
+
+    except Exception as e:
+        cognit_logger.error(f"Error updating new start metrics: {e}")
+
+def update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration):
+    """Update new metrics when function execution completes."""
+    try:
+        # Observe duration in histogram (automatically updates _sum and _count)
+        function_duration_seconds.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).observe(duration)
+
+        # Reset current function gauge to 0
+        vm_current_function.labels(vm=vmid, fc_hash=fc_hash, app_req_id=app_req_id).set(0)
+        # set vm_is_executing to 0 when execution completes
+        vm_is_executing.set(0)
+    except Exception as e:
+        cognit_logger.error(f"Error updating new completion metrics: {e}")
 
 def pb_serialize_result(result):
     
@@ -249,15 +299,15 @@ class CognitFuncExecCollector(object):
                 # Add async metric
                 metric_label_values = [vmid, "async", self.fc_hash, self.a_st_t, self.a_end_t, app_req_id, str(sum(params_prom_label))]
                 gauge.add_metric(metric_label_values, self.exec_async_time)
-                yield gauge 
+                #yield gauge 
             elif 'sync_end_time' in globals() and isinstance(sync_end_time, float) and\
                 'sync_start_time' in globals() and isinstance(sync_start_time, float):
                 # Define variables for setting sync labels    
                 self.exec_time = sync_end_time - sync_start_time
                 # Add sync metric
                 metric_label_values = [vmid, "sync", self.fc_hash, self.s_st_t, self.s_end_t, app_req_id, str(sum(params_prom_label))]
-                gauge.add_metric(metric_label_values, self.exec_time)
-                yield gauge
+                #gauge.add_metric(metric_label_values, self.exec_time)
+                #yield gauge
             else:    
                 self.exec_time = 0.0
                 self.exec_async_time = 0.0
@@ -269,8 +319,8 @@ class CognitFuncExecCollector(object):
             global executor
             if executor is not None:
                 func_status = executor.get_status()
-                func_status_gauge.add_metric([off_func.fc_hash, vmid, str(sum(params_prom_label))], func_status)
-                yield func_status_gauge
+                #func_status_gauge.add_metric([off_func.fc_hash, vmid, str(sum(params_prom_label))], func_status)
+                #yield func_status_gauge
 
                 # Add counters for executed, succeeded, and failed functions
                 executed_counter = CounterMetricFamily("sr_func_executed_total", "Total number of executed functions", labels=['vm_id'])
@@ -278,12 +328,12 @@ class CognitFuncExecCollector(object):
                 failed_counter = CounterMetricFamily("sr_func_failed_total", "Total number of failed functions", labels=['vm_id'])
 
                 executed_counter.add_metric([vmid], executor.get_executed_func_counter())
-                succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
-                failed_counter.add_metric([vmid], executor.get_failed_func_counter())
+                #succeeded_counter.add_metric([vmid], executor.get_successed_func_counter())
+                #failed_counter.add_metric([vmid], executor.get_failed_func_counter())
 
                 yield executed_counter
-                yield succeeded_counter
-                yield failed_counter
+                #yield succeeded_counter
+                #yield failed_counter
                 
                 
         except Exception as e:
@@ -369,6 +419,11 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
             params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
             params_prom_label.insert(0, params.__sizeof__())
 
+        # Initialize new metrics at start of execution (alongside existing metrics)
+        vmid = get_vmid()
+        fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
+        update_function_metrics_on_start(vmid, fc_hash, app_req_id)
+
         # Define sync metric exposure global variables
         global sync_start_time
         global sync_end_time
@@ -385,6 +440,12 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
 
         update_histogram_metrics(executor, get_vmid())
 
+        # Update new metrics on completion (alongside existing metrics)
+        vmid = get_vmid()
+        fc_hash = off_func.fc_hash if hasattr(off_func, 'fc_hash') else ""
+        duration = sync_end_time - sync_start_time
+        update_function_metrics_on_completion(vmid, fc_hash, app_req_id, duration)
+
         if offloaded_func.lang == "PY":
             b64_res = faas_parser.serialize(executor.get_result())
 
@@ -396,97 +457,3 @@ async def execute_sync(offloaded_func: ExecSyncParams) -> ExecResponse:
 
         return result.dict()
 
-# POST /v1/faas/execute-async
-@faas_router.post("/execute-async")
-async def execute_async(offloaded_func: ExecAsyncParams, response: Response):
-    global executor, executor_lock
-    with executor_lock:
-        # Validate and deserialize the request based on the language
-        if offloaded_func.lang == "PY":
-            try:
-                fc, params = deserialize_py_fc(offloaded_func)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail="Error deserializing async PY function. More details; {0}".format(e))
-            if not callable(fc):
-                raise HTTPException(status_code=400, detail=" Not callable function")
-
-            executor = PyExec(fc=fc, params=params)
-            
-        elif offloaded_func.lang == "C":
-            try:
-                fc, params = deserialize_c_fc(offloaded_func)
-            except Exception as e:
-                raise HTTPException(status_code=400, detail="Error deserializing async C function. More details; {0}".format(e))
-            executor = CExec(fc=fc, params=params)
-        else:
-            raise HTTPException(
-                status_code=400, detail="Unsupported language. Supported languages: PY, C"
-            )
-
-        if offloaded_func.fc_hash != "":
-            cognit_logger.debug(f"Hash of function: {offloaded_func.fc_hash}")
-        global off_func
-        off_func = offloaded_func
-
-        task_id = faas_manager.add_task(executor=executor)
-        
-        if 'params' in locals():
-            global params_prom_label
-            params_prom_label = [params[i].__sizeof__() for i in range(len(params))]
-            params_prom_label.insert(0,params.__sizeof__())
-
-        return AsyncExecResponse(
-            status=AsyncExecStatus.WORKING,
-            res=None,
-            exec_id=AsyncExecId(faas_task_uuid=task_id),
-        ).dict()
-
-
-# GET /v1/faas/{faas_uuid}/status
-@faas_router.get("/{faas_task_uuid}/status")
-async def get_faas_uuid_status(faas_task_uuid: str):
-    task = faas_manager.get_task_status(task_uuid=faas_task_uuid)
-
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    
-    global executor, executor_lock
-    with executor_lock:
-        status, executor = task
-
-        if status == TaskState.OK:
-            if executor.lang == "PY":
-                exec_response = ExecResponse(
-                    ret_code=ExecReturnCode.SUCCESS, res=faas_parser.serialize(executor.res)
-                )
-            elif executor.lang == "C":
-                exec_response = ExecResponse(
-                    ret_code=ExecReturnCode.SUCCESS, res=faas_parser.any_to_b64(executor.res)
-                )
-
-            # Define async metrics global variables
-            global async_start_time
-            global async_end_time
-            async_start_time = executor.start_pyexec_time
-            async_end_time = executor.end_pyexec_time
-            response = AsyncExecResponse(
-                status=AsyncExecStatus.READY,
-                res=exec_response,
-                exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
-            )
-        elif status == TaskState.FAILED:
-            response = AsyncExecResponse(
-                status=AsyncExecStatus.FAILED,
-                res=None,
-                exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
-            )
-        else:
-            response = AsyncExecResponse(
-                status=AsyncExecStatus.WORKING,
-                res=None,
-                exec_id=AsyncExecId(faas_task_uuid=faas_task_uuid),
-            )
-        if status != AsyncExecStatus.WORKING:
-            update_histogram_metrics(executor, get_vmid(), status==TaskState.OK)
-
-        return response.dict()
